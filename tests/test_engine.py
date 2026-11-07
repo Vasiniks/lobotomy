@@ -249,3 +249,41 @@ def test_analysis_helpers(fresh):
     assert len(lens) == 24 and len(lens[0]) == 3
     says = fresh.neuron_vocab(12, top[0]["neuron"], k=4)
     assert len(says["promotes"]) == 4
+
+
+def test_flow_steps_line_up_with_the_words(fresh):
+    import base64
+
+    r = fresh.chat(Q)
+    k = 16
+    f = fresh.flow(r, k=k)
+    n = len(r.token_ids)
+    # one step per pass that wrote a word: the last prompt token wrote the first
+    assert len(f["steps"]) == n + 1
+    toks = r.recorded_tokens(fresh.tokenizer)
+    reply_rows = [t for t in toks if t["role"] == "reply"]
+    assert [s["says"] for s in f["steps"][:n]] == [t["text"] for t in reply_rows]
+    assert [s["reads"] for s in f["steps"][1:]] == [t["text"] for t in reply_rows]
+    assert f["steps"][0]["prob"] == r.token_probs[0]
+    assert f["steps"][-1]["says"] is None and f["steps"][-1]["end"] == "stop"
+    S, L = len(f["steps"]), fresh.config.n_layers
+    idx = np.frombuffer(base64.b64decode(f["idx"]), "<u2").reshape(S, L, k)
+    val = np.frombuffer(base64.b64decode(f["val"]), np.uint8).reshape(S, L, k)
+    a = np.abs(r.recording.mlp[f["steps"][3]["row"]].astype(np.float32))
+    assert (idx[3, :, 0] == a.argmax(axis=1)).all()
+    assert (np.diff(val.astype(int), axis=2) <= 0).all()  # strongest first
+    assert len(f["scale"]) == L and min(f["scale"]) > 0
+
+
+def test_token_events_carry_their_strongest_neurons(fresh):
+    events = list(fresh.stream_chat(Q))
+    tokens = [e for e in events if e["type"] == "token"]
+    r = events[-1]["reply"]
+    L = fresh.config.n_layers
+    first = tokens[0]["flow"]
+    assert len(first["idx"]) == L and len(first["idx"][0]) == fresh.flow_k
+    # the first word was written by the pass over the last prompt token
+    toks = r.recorded_tokens(fresh.tokenizer)
+    row = next(t["row"] for t in toks if t["role"] == "reply") - 1
+    a = np.abs(r.recording.mlp[row].astype(np.float32))
+    assert [ix[0] for ix in first["idx"]] == a.argmax(axis=1).tolist()

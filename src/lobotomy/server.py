@@ -485,6 +485,12 @@ def create_app(engine: Engine) -> FastAPI:
             "attention": attention,
         }
 
+    @app.get("/api/replies/{reply_id}/flow")
+    async def flow(reply_id: int, k: int = Query(96, ge=1, le=512)):
+        """The 3D view's replay: per word written, each layer's strongest neurons."""
+        r = api.full(reply_id)
+        return await api.run(eng.flow, r, k)
+
     @app.get("/api/replies/{reply_id}/lens")
     async def lens(reply_id: int):
         """Logit-lens grid: per reply token, the probability each layer already gave it."""

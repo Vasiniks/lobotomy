@@ -58,6 +58,10 @@ def test_chat_edit_again_inspect(client, fresh):
     layers = client.get(f"/api/replies/{reply['id']}/layers").json()["layers"]
     assert len(layers) == 24 and len(layers[0]["heads"]) == 16
 
+    flow = client.get(f"/api/replies/{reply['id']}/flow?k=8").json()
+    assert len(flow["steps"]) == len(reply_rows) + 1 and flow["k"] == 8
+    assert all(len(e["flow"]["idx"]) == 24 for e in ev if e["type"] == "token")
+
     lay = client.get(f"/api/replies/{reply['id']}/layer/11").json()
     assert len(lay["grid"]) == fresh.config.intermediate_size and lay["n_heads"] == 8 and len(lay["top"]) == 40
 

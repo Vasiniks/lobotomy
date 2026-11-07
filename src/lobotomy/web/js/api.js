@@ -78,6 +78,7 @@ export const api = {
   token: (id, row) => json("GET", `/api/replies/${id}/token/${row}`),
   damage: (id) => json("GET", `/api/replies/${id}/damage`),
   lens: (id) => json("GET", `/api/replies/${id}/lens`),
+  flow: (id, k = 96) => json("GET", `/api/replies/${id}/flow?k=${k}`),
   why: (id, row, k = 12) => json("GET", `/api/replies/${id}/why/${row}?k=${k}`),
   scan: (id, params) => json("GET", `/api/replies/${id}/scan?${new URLSearchParams(params)}`),
   tokenize: (text) => json("GET", `/api/tokenize?text=${encodeURIComponent(text)}`),

@@ -119,6 +119,33 @@ Everything under "Screen" above is built, plus the following:
 - **The theme follows the system setting** until toggled. The design opened
   dark always.
 
+### The 3D layer stack (2026-11-07, first build; the look is still open)
+
+The user chose stacked sheets from three shapes mocked up with real data, and
+asked for a timeline, moving lines and thicker lines for harder firing. These
+are the calls made while building it:
+
+- **It replaces the strips by default,** with a 3D / Activity / Lens switch, so
+  the 2D strips, the lens and the cut cost are one click away.
+- **One timeline step per pass that wrote a word.** The first step is the pass
+  over the last prompt token (it wrote the first word); each step "reads" one
+  token and "says" the next. Layers above the playhead keep the previous word,
+  dimmed, since that is the model's state mid-pass.
+- **Lines go to each layer's 48 strongest neurons** (the replay carries the
+  top 96 per layer and word; the live stream the top 32). Strength is the size
+  of the activation against the layer's 99.9th percentile over the reply, the
+  same reference the "why" ranking uses. Lines start at the line through the
+  sheets, because every neuron reads from and writes to that residual stream.
+- **Live while it writes, replay afterwards.** At about 50 words a second the
+  live view is a light show; the timeline then swaps in the full data, paused at
+  the end. Play starts from the top. 1× takes 1.5 s per word; ¼× to 8×.
+- **Keys:** Space plays or pauses, ← → step one layer, Shift ← → one word.
+- **A clicked neuron opens the same editor as the layer view,** and lights the
+  timeline by that neuron's activity (where it fired). Edited neurons keep their
+  ring colour in 3D; "off" is a ring cut through, like the 2D cells.
+- **Not built yet:** lines to the neurons a neuron feeds in later layers (its
+  wiring), heads and attention in 3D.
+
 ## Non-goals for now
 
 - vision input

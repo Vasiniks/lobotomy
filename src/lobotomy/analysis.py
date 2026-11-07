@@ -146,3 +146,18 @@ def sparkline(values, width: int | None = None) -> str:
     if hi - lo < 1e-12:
         return bars[4] * v.size
     return "".join(bars[int(round((x - lo) / (hi - lo) * (len(bars) - 1)))] for x in v)
+
+
+def top_by_layer(vals: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """The k neurons that fired hardest (by size) in every layer, strongest first.
+
+    ``vals`` is (..., L, N) activations; returns indices (..., L, k) and their
+    signed values (..., L, k). Used by the 3D view's lines.
+    """
+    v = np.asarray(vals, np.float32)
+    a = np.abs(v)
+    k = max(1, min(int(k), a.shape[-1]))
+    idx = np.argpartition(-a, k - 1, axis=-1)[..., :k]
+    order = np.argsort(-np.take_along_axis(a, idx, -1), axis=-1, kind="stable")
+    idx = np.take_along_axis(idx, order, -1)
+    return idx, np.take_along_axis(v, idx, -1)

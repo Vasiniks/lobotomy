@@ -151,3 +151,51 @@
 @media (prefers-reduced-motion: reduce) {
   .is-busy .status-dot, .msg-model.is-streaming .msg-body::after { animation: none; }
 }
+
+/* --- 3D layer stack ---------------------------------------------------------------- */
+.body > section.is-3d { display: flex; flex-direction: column; overflow: hidden; }
+.s3d { flex: 1 1 auto; min-height: 440px; display: grid; grid-template-rows: minmax(0, 1fr) auto; border-top: var(--rule-width) solid var(--rule); }
+.s3d-stage { position: relative; min-height: 0; overflow: hidden; background: var(--surface-well); }
+.s3d-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.s3d-canvas:active { cursor: grabbing; }
+.s3d-canvas:focus-visible, .s3d-track:focus-visible { outline: 1px solid var(--focus); outline-offset: -2px; }
+.s3d-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.s3d-lbl { position: absolute; transform: translateY(-50%); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1; color: var(--ink-3); white-space: nowrap; }
+.s3d-lbl.is-hot { color: var(--ink-1); }
+.s3d-io { position: absolute; transform: translate(-50%, -50%); padding: 2px 8px; border-radius: 3px; background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-1); white-space: pre; }
+.s3d-io small { margin-right: 6px; font-size: var(--text-2xs); color: var(--ink-3); }
+.s3d-tip { position: absolute; pointer-events: none; padding: 3px 8px; border-radius: 3px; background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-1); white-space: nowrap; }
+.s3d-chip { position: absolute; top: var(--space-3); left: var(--space-3); right: var(--space-3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); width: max-content; max-width: calc(100% - 2 * var(--space-3)); padding: 6px 6px 6px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
+.s3d-chip .meta { color: var(--ink-3); font-size: var(--text-sm); }
+.s3d-empty { position: absolute; left: var(--space-4); right: var(--space-4); bottom: var(--space-4); margin: 0; color: var(--ink-3); font-size: var(--text-sm); pointer-events: none; }
+.s3d-anchor { position: fixed; width: 1px; height: 1px; pointer-events: none; }
+[hidden].s3d-tip, [hidden].s3d-chip, [hidden].s3d-empty, [hidden].s3d-io, [hidden].s3d-head { display: none; }
+
+.s3d-tl { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-4) var(--space-3); background: var(--surface-panel); border-top: var(--rule-width) solid var(--rule); }
+.s3d-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.s3d-tbtn { min-width: 32px; padding-inline: 8px; justify-content: center; }
+.s3d-icon { display: inline-flex; }
+.s3d-play { min-width: 40px; }
+.s3d-readout { flex: 1 1 220px; min-width: 0; margin-left: var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.s3d-readout strong { color: var(--ink-1); font-weight: var(--weight-bold); }
+.s3d-speed { font: inherit; font-size: var(--text-sm); color: var(--ink-1); background: var(--surface-raised); border: 0; box-shadow: inset 0 0 0 1px var(--rule-strong); border-radius: var(--radius-control); padding: 4px 6px; }
+.s3d-track { position: relative; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; cursor: pointer; scrollbar-width: thin; }
+.s3d-steps { display: flex; gap: 2px; width: max-content; }
+/* one step per word; the small ticks are its 24 layers */
+.s3d-step {
+  position: relative; display: flex; align-items: flex-end; min-width: 44px; height: 36px; padding: 0 6px 4px;
+  border-radius: 2px; overflow: hidden; background-color: var(--fired, var(--surface-well));
+  background-image: linear-gradient(to right, var(--rule) 1px, transparent 1px);
+  background-size: calc(100% / 24) 6px; background-repeat: repeat-x;
+}
+.s3d-fill { position: absolute; left: 0; top: 0; height: 3px; width: 0; background: var(--ink-1); }
+.s3d-step.is-done .s3d-fill { width: 100% !important; background: var(--ink-3); }
+.s3d-step:not(.is-done):not(.is-current) .s3d-fill { width: 0 !important; }
+.s3d-word { position: relative; font-size: var(--text-sm); color: var(--ink-3); white-space: pre; }
+.s3d-step.is-done .s3d-word { color: var(--ink-2); }
+.s3d-step.is-current .s3d-word { color: var(--ink-1); font-weight: var(--weight-bold); }
+.s3d-step.is-fired .s3d-word { font-weight: var(--weight-bold); }
+.s3d-head { position: absolute; top: 0; left: 0; bottom: 6px; width: 2px; margin-left: -1px; background: var(--ink-1); pointer-events: none; }
+@media (max-width: 760px) {
+  .body > section.is-3d { min-height: 70vh; }
+}

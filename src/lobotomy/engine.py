@@ -21,6 +21,7 @@ use the current weights.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import threading
 import time
@@ -30,6 +31,7 @@ from typing import Callable, Iterator
 
 import numpy as np
 
+from .analysis import top_by_layer
 from .backends import Backend, RecordSpec, Recording, default_backend, get_backend
 from .config import ModelConfig
 from .edits import Edit, EditStack, Target, resolve
@@ -146,6 +148,8 @@ class Engine:
         # Full recordings (every neuron at every token) are ~100 MB per reply;
         # older replies keep only the small summaries the chat and compare views need.
         self.keep_recordings = 8
+        # neurons per layer sent with every streamed token, for the live 3D view
+        self.flow_k = 32
         self._mem: dict | None = None  # cache after the latest reply
         self._ask_snap: dict | None = None  # cache just before the latest prompt's last token
         self._lock = threading.RLock()
@@ -459,7 +463,15 @@ class Engine:
             if piece:
                 decoded = full
             texts.append(tok.token_str(tid))
-            yield {"type": "token", "text": piece, "token_id": tid, "prob": p, "index": len(out_ids) - 1}
+            yield {
+                "type": "token",
+                "text": piece,
+                "token_id": tid,
+                "prob": p,
+                "index": len(out_ids) - 1,
+                # the pass that wrote this word: its strongest neurons per layer
+                "flow": self._token_flow(parts[-1]),
+            }
             logits, rec = self.backend.forward([tid], cache, spec)
             parts.append(rec)
         t_decode = time.time() - t1
@@ -496,6 +508,12 @@ class Engine:
             # every generated token was fed, so the cache holds prompt + reply
             self._mem = {"reply_id": reply.id, "tokens": prompt_ids + out_ids, "snap": be.snapshot_cache(cache)}
         yield {"type": "done", "reply": reply}
+
+    def _token_flow(self, rec: Recording | None) -> dict | None:
+        if rec is None or rec.mlp is None or not rec.n_positions:
+            return None
+        idx, val = top_by_layer(rec.mlp[-1], self.flow_k)
+        return {"idx": idx.tolist(), "val": np.round(val, 3).tolist()}
 
     def _trim_old_recordings(self) -> None:
         replies = sorted((r for ex in self.exchanges for r in ex.replies), key=lambda r: r.id)
@@ -639,6 +657,49 @@ class Engine:
             "support": support,
             "oppose": oppose,
             "layer_effect": layer_total,
+        }
+
+    def flow(self, reply: Reply, k: int = 96) -> dict:
+        """The reply as the 3D view replays it: one step per pass that wrote a word.
+
+        Step i reads one token and says the next: the first step is the pass over
+        the last prompt token (it wrote the reply's first word), the last is the
+        pass over the reply's last word (it said "stop", or nothing if the reply
+        was cut off). For every step and layer: the k strongest neurons (indices,
+        strongest first) and their size as 0..255 of the layer's usual range
+        over this reply (values above the range clip at 255).
+        """
+        rec = reply.recording
+        if rec is None or rec.mlp is None:
+            raise ValueError("no recording")
+        toks = reply.recorded_tokens(self.tokenizer)
+        reply_rows = [t["row"] for t in toks if t["role"] == "reply"]
+        first = reply_rows[0] - 1 if reply_rows else len(toks) - 1
+        rows = list(range(max(0, first), len(toks)))
+        steps = []
+        for row in rows:
+            nxt = row + 1
+            says_pos = toks[row]["position"] + 1 - reply.prompt_len  # index into the reply
+            steps.append(
+                {
+                    "row": row,
+                    "reads": toks[row]["text"],
+                    "says": toks[nxt]["text"] if nxt < len(toks) else None,
+                    "prob": reply.token_probs[says_pos] if 0 <= says_pos < len(reply.token_probs) else None,
+                    "end": reply.finish_reason if nxt >= len(toks) else None,
+                }
+            )
+        scale = np.maximum(np.asarray(reply.layer_refs(), np.float32), 1e-6)
+        idx, val = top_by_layer(rec.mlp[rows], k)  # (S, L, k)
+        q = np.round(np.clip(np.abs(val) / scale[None, :, None], 0, 1) * 255).astype(np.uint8)
+        return {
+            "steps": steps,
+            "k": int(idx.shape[-1]),
+            "n_layers": int(idx.shape[1]),
+            "n_neurons": int(rec.mlp.shape[2]),
+            "scale": scale.tolist(),
+            "idx": base64.b64encode(idx.astype("<u2").tobytes()).decode(),
+            "val": base64.b64encode(q.tobytes()).decode(),
         }
 
     def lens_grid(self, reply: Reply) -> dict:

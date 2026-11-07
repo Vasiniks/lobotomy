@@ -4,9 +4,10 @@ import * as S from "../store.js";
 import { state } from "../store.js";
 import { placeRowCursor, renderRail, renderStrips, swatch } from "../components.js";
 import { clear, fmt, h, splitLead } from "../util.js";
+import { mountStack3D } from "./stack3d.js";
 
 let showCost = false;
-let stackMode = "activity"; // or "lens"
+let stackMode = "3d"; // or "activity" or "lens" (the 2D strips)
 // The chat pane is rebuilt on state changes; keep what the user was typing.
 let draft = "";
 let composerFocused = false;
@@ -199,12 +200,14 @@ function hoverRow(row) {
 
 export function renderStack(section) {
   clear(section);
+  const is3d = stackMode === "3d";
+  section.classList.toggle("is-3d", is3d);
   const last = S.lastReply();
   const detail = last ? state.details.get(last.id) : null;
   let cost = last && showCost ? S.scanResult(last.id, "layers") : null;
   if (cost && !cost.length) cost = null; // empty reply: nothing to measure
   // Results are dropped when edits change or a new reply arrives; re-measure.
-  if (showCost && last && !cost && !state.busy && last.n_tokens > 0) {
+  if (!is3d && showCost && last && !cost && !state.busy && last.n_tokens > 0) {
     S.scan(last.id, "layers").catch(() => {
       showCost = false;
       S.emit();
@@ -227,25 +230,30 @@ export function renderStack(section) {
     h(
       "p",
       { class: "meta" },
-      lensMode
+      is3d
+        ? "Every word climbs the 24 layers. Lines reach out to the neurons that fired on it, thicker for harder firing. Click a layer to pull it out, then a neuron to edit it."
+        : lensMode
         ? "Logit lens: one cell per word of the last reply. The brighter the cell, the more sure that layer already was of the word that came next (read through the final norm and unembedding). Watch where the answer appears."
         : "One strip per layer, one cell per token of the last reply. The brighter the cell, the harder that layer fired on that token, against its own usual range. Open a strip to edit it.",
     ),
-    last
+    last || is3d
       ? h(
           "div",
           { class: "stack-tools" },
           h(
             "div",
-            { class: "seg", role: "group", "aria-label": "What the strips show" },
-            h("button", { type: "button", "aria-pressed": String(!lensMode), onclick: () => ((stackMode = "activity"), S.emit()) }, "Activity"),
+            { class: "seg", role: "group", "aria-label": "What the layers show" },
+            h("button", { type: "button", "aria-pressed": String(is3d), onclick: () => ((stackMode = "3d"), S.emit()) }, "3D"),
+            h("button", { type: "button", "aria-pressed": String(!is3d && !lensMode), onclick: () => ((stackMode = "activity"), S.emit()) }, "Activity"),
             h(
               "button",
-              { type: "button", "aria-pressed": String(!!lensMode), disabled: !last.n_tokens, onclick: () => ((stackMode = "lens"), S.emit()) },
+              { type: "button", "aria-pressed": String(!!lensMode), disabled: !last?.n_tokens, onclick: () => ((stackMode = "lens"), S.emit()) },
               "Lens",
             ),
           ),
-          h(
+          is3d || !last
+            ? null
+            : h(
             "button",
             {
               class: "btn",
@@ -281,6 +289,10 @@ export function renderStack(section) {
   );
   section.append(head);
   if (!state.model) return;
+  if (is3d) {
+    mountStack3D(section);
+    return;
+  }
   if (!last) {
     section.append(
       h("p", { class: "stack-empty" }, "The layers light up after the first reply. Each of the 24 strips shows how hard that layer fired on every word the model wrote."),

@@ -38,7 +38,15 @@ yet, so it refuses to load them.
 
 ## The web UI
 
-- **Chat.** Replies stream in; every word is clickable. Next to the chat, the
+- **3D layers.** Next to the chat, the 24 layers are stacked as sheets of
+  neurons. Every word the model writes climbs through them, and lines reach out
+  to the neurons that fired on it, thicker for harder firing. The timeline
+  underneath plays, pauses and steps through the reply: Shift ← → moves one
+  word, ← → one layer. While the model writes, the sheets light up live. Click a
+  sheet to pull it out, then a neuron to edit it. The timeline then lights up
+  wherever that neuron fired. The 3D / Activity / Lens switch brings back the 2D
+  strips.
+- **Chat.** Replies stream in; every word is clickable. In *Activity* mode the
   layer stack shows one strip per layer and one cell per word, lit by how hard
   that layer fired. **What matters here?** cuts each layer alone and shows how
   much the answer would change.
@@ -76,7 +84,9 @@ yet, so it refuses to load them.
 - Shortcuts: `/` focuses the message box, ⌘Z undoes the last edit, ⌘↵ asks
   again.
 
-![The chat with the layer stack](docs/screenshots/chat.png)
+![The 3D layers mid-climb: layers 0 to 14 lit by the word being read, lines thicker for harder firing, the timeline underneath](docs/screenshots/3d.png)
+
+![The chat with the 2D layer strips (Activity)](docs/screenshots/chat.png)
 
 ![The layer stack in Lens mode: the answer appears from about layer 16 upward](docs/screenshots/lens.png)
 
@@ -188,5 +198,6 @@ LOBOTOMY_TEST_BACKENDS=cuda python -m pytest tests/test_backend_contract.py test
 ## Credits
 
 The MLX model follows mlx-lm's Qwen3.5 implementation and uses its Metal
-gated-delta kernel (MIT, Apple). Weights: Qwen3.5 by the Qwen team (Apache-2.0),
+gated-delta kernel (MIT, Apple). The 3D view uses three.js r170 (MIT), vendored
+in `web/vendor/three/`. Weights: Qwen3.5 by the Qwen team (Apache-2.0),
 quantized by Unsloth.

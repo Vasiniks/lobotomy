@@ -138,6 +138,22 @@ export async function layerData(replyId, layer, rows = "reply") {
 
 // --- chat ---------------------------------------------------------------------------
 
+// Views that want every streamed event (the 3D stack lights up live).
+const streamListeners = new Set();
+export function onStream(fn) {
+  streamListeners.add(fn);
+  return () => streamListeners.delete(fn);
+}
+function tellStream(ev) {
+  for (const fn of streamListeners) {
+    try {
+      fn(ev);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+}
+
 async function runStream(start, exchange) {
   state.busy = true;
   state.streaming = { exchangeId: exchange?.id ?? null, user: exchange?.user, text: "", healthy: false };
@@ -145,6 +161,7 @@ async function runStream(start, exchange) {
   let done = null;
   try {
     done = await start((ev) => {
+      tellStream(ev);
       if (ev.type === "start") {
         state.streaming.exchangeId = ev.exchange_id;
         state.streaming.healthy = ev.healthy;
@@ -159,6 +176,7 @@ async function runStream(start, exchange) {
   } finally {
     state.busy = false;
     state.streaming = null;
+    tellStream({ type: "end" });
   }
   const s = await api.state();
   state.exchanges = s.exchanges;
