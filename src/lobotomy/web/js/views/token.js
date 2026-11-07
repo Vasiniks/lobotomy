@@ -134,6 +134,27 @@ function renderWhy(replyId, d) {
   return box;
 }
 
+// Zero the token's embedding row. The embedding is tied to the output head, so
+// the model can neither read this token nor say it.
+function eraseButton(d) {
+  const target = { kind: "token", index: d.token.token_id };
+  const e = S.editFor(target);
+  if (e) return h("span", { class: "meta" }, `Token ${d.token.token_id} is erased.`);
+  return h(
+    "button",
+    {
+      class: "btn btn-quiet",
+      type: "button",
+      title: "Zero this token's embedding. It's shared with the output layer, so the model can neither read nor say this exact token (it may still spell the word another way).",
+      onclick: () =>
+        S.setScale(target, 0, `Erased token “${showToken(d.token.text)}” (id ${d.token.token_id}).`).then(() =>
+          S.toast("Erased. Ask again to see what it says instead."),
+        ),
+    },
+    `Erase token “${d.token.text.trim() || showToken(d.token.text)}”`,
+  );
+}
+
 export async function renderTokenView(body, replyId, row) {
   body.className = "body";
   const key = `${replyId}:${row}`;
@@ -332,6 +353,7 @@ function renderInspect(el, d, detail, replyId) {
             d.alternatives.map((a) => h("span", {}, h("code", {}, showToken(a.text)), ` ${fmt(a.prob, 2)}`)),
           )
         : null,
+      h("div", { class: "why-actions" }, eraseButton(d)),
     ),
     renderWhy(replyId, d),
     h(
