@@ -324,3 +324,25 @@ def test_neuron_wiring_reads_the_healthy_weights(fresh):
     fresh.add_edit(Target("neuron", layer=21, index=first[0]["neuron"]), value=0.0)
     assert fresh.neuron_wiring(20, 1234, k=k)[0]["neuron"] == first[0]["neuron"]
     assert fresh.neuron_wiring(L - 1, 0) == []
+
+
+def test_flow_steps_carry_the_candidates(fresh):
+    r = fresh.chat(Q)
+    f = fresh.flow(r, k=4)
+    for i, st in enumerate(f["steps"][: len(r.token_ids)]):
+        assert [a["prob"] for a in st["alts"]] == [p for _, p in r.alternatives[i]]
+    assert f["steps"][-1]["alts"] == []
+
+
+def test_step_lens_ends_at_the_real_output(fresh):
+    r = fresh.chat(Q)
+    f = fresh.flow(r, k=4)
+    st = f["steps"][2]  # this pass wrote reply token 2
+    g = fresh.step_lens(r, st["row"], k=3)
+    L = fresh.config.n_layers
+    assert len(g["layers"]) == L and len(g["layers"][0]["top"]) == 3
+    assert g["next"] == st["says"]
+    # the last layer through the final norm is the model's real output
+    seen = dict(r.alternatives[2]).get(r.token_ids[2])
+    assert abs(g["layers"][-1]["p_next"] - seen) < 0.03
+    assert g["layers"][-1]["top"][0]["prob"] >= g["layers"][-1]["p_next"] - 1e-6

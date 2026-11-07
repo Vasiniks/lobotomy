@@ -71,6 +71,10 @@ def test_chat_edit_again_inspect(client, fresh):
     total = l3["before"][0] + sum(l3["rows"][0])
     assert abs(total - 1) < 0.02  # every head's attention adds up to 1
 
+    guess = client.get(f"/api/replies/{reply['id']}/guess/{flow['steps'][0]['row']}").json()
+    assert len(guess["layers"]) == 24 and guess["next"] == flow["steps"][0]["says"]
+    assert flow["steps"][0]["alts"][0]["prob"] > 0
+
     wiring = client.get("/api/neuron/5/100/wiring?k=2").json()["targets"]
     assert len(wiring) == 2 * (24 - 6) and wiring[0]["layer"] == 6
 

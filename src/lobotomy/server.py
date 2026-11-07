@@ -510,6 +510,17 @@ def create_app(engine: Engine) -> FastAPI:
             }
         return {"row": row, "layers": layers}
 
+    @app.get("/api/replies/{reply_id}/guess/{row}")
+    async def guess(reply_id: int, row: int, k: int = Query(3, ge=1, le=10)):
+        """Every layer's best guesses for the next word at one position (logit lens)."""
+        r = api.full(reply_id)
+        try:
+            return await api.run(eng.step_lens, r, row, k)
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+        except NotImplementedError:
+            raise HTTPException(501, "this backend can't compute the logit lens")
+
     @app.get("/api/neuron/{layer}/{neuron}/wiring")
     async def wiring(layer: int, neuron: int, k: int = Query(4, ge=1, le=64)):
         """The later neurons this one feeds most, from the healthy weights."""

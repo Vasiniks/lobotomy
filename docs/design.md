@@ -152,6 +152,18 @@ are the calls made while building it:
   Solid lines boost and dashed lines suppress (sign flipped when the neuron
   fired negative at that word). The popover lists the strongest six; clicking
   one pulls out that layer and opens that neuron.
+- **Word probabilities:** a *Next word* card (top right) lists the 5
+  candidates the model weighed, with the model's own probabilities (before
+  temperature, top-k and top-p; the readout uses the same number). Beside
+  each layer, once the word has reached it: that layer's best guess (logit
+  lens) and a bar for the probability it already gave the word that came.
+  Fetched per step from `GET /api/replies/{id}/guess/{row}`.
+- **Hovering an edit** in the rail puts a beacon on it in the tower: a line
+  from the neuron, head tile or sheet up out of the top, in the edit's
+  colour, with its label.
+- **View:** layer spacing, neuron spacing and neuron size sliders,
+  remembered per browser. Defaults are tighter layers (0.22) and larger
+  neurons than the first build, with a depth fade on the far side.
 - **Attention is drawn into the timeline:** when the playhead (or a pulled-out
   layer) is on an attention layer and paused, lines run from the sheet, or from
   a clicked head, down to the words it looked at most. "Your message" collects

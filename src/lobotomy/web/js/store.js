@@ -138,6 +138,12 @@ export async function layerData(replyId, layer, rows = "reply") {
 
 // --- chat ---------------------------------------------------------------------------
 
+// The edit the pointer is over in the edits rail; the 3D view marks where it is.
+export const hover = { edit: null };
+export function setHoverEdit(e) {
+  hover.edit = e;
+}
+
 // Views that want every streamed event (the 3D stack lights up live).
 const streamListeners = new Set();
 export function onStream(fn) {

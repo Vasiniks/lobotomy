@@ -160,14 +160,19 @@
 .s3d-canvas:active { cursor: grabbing; }
 .s3d-canvas:focus-visible, .s3d-track:focus-visible { outline: 1px solid var(--focus); outline-offset: -2px; }
 .s3d-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.s3d-lbl { position: absolute; transform: translateY(-50%); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1; color: var(--ink-3); white-space: nowrap; }
-.s3d-lbl.is-hot { color: var(--ink-1); }
+.s3d-lbl { position: absolute; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1; color: var(--ink-3); white-space: nowrap; }
+.s3d-lbl b { min-width: 3.4em; font-weight: 500; }
+.s3d-lbl.is-hot b { color: var(--ink-1); }
+/* each layer's guess for the next word (logit lens) and how sure it was of the real one */
+.s3d-lbar { display: inline-block; flex: 0 0 auto; width: 0; height: 4px; border-radius: 1px; background: var(--act-7); }
+.s3d-guess { color: var(--ink-3); }
+.s3d-lbl.is-right .s3d-guess { color: var(--ink-1); }
 .s3d-io { position: absolute; transform: translate(-50%, -50%); padding: 2px 8px; border-radius: 3px; background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-1); white-space: pre; }
 .s3d-io small { margin-right: 6px; font-size: var(--text-2xs); color: var(--ink-3); }
 .s3d-tip { position: absolute; pointer-events: none; padding: 3px 8px; border-radius: 3px; background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-1); white-space: nowrap; }
-.s3d-chip { position: absolute; top: var(--space-3); left: var(--space-3); right: var(--space-3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); width: max-content; max-width: calc(100% - 2 * var(--space-3)); padding: 6px 6px 6px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
+.s3d-chip { position: absolute; top: var(--space-3); left: var(--space-3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); width: max-content; max-width: calc(100% - 2 * var(--space-3) - 260px); padding: 6px 6px 6px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
 .s3d-chip .meta { color: var(--ink-3); font-size: var(--text-sm); }
-.s3d-empty { position: absolute; left: var(--space-4); right: var(--space-4); bottom: var(--space-4); margin: 0; color: var(--ink-3); font-size: var(--text-sm); pointer-events: none; }
+.s3d-empty { position: absolute; left: var(--space-4); right: var(--space-4); top: var(--space-4); margin: 0; color: var(--ink-3); font-size: var(--text-sm); pointer-events: none; }
 .s3d-anchor { position: fixed; width: 1px; height: 1px; pointer-events: none; }
 [hidden].s3d-tip, [hidden].s3d-chip, [hidden].s3d-empty, [hidden].s3d-io, [hidden].s3d-head { display: none; }
 
@@ -205,9 +210,32 @@
 .s3d-look { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
 .s3d-look path { fill: none; stroke: var(--ink-1); stroke-linecap: round; stroke-dasharray: 2 7; animation: s3d-flow 0.9s linear infinite; }
 @keyframes s3d-flow { to { stroke-dashoffset: 9; } }
-.s3d-lookcap { position: absolute; right: var(--space-3); bottom: var(--space-3); max-width: min(520px, calc(100% - 2 * var(--space-3))); margin: 0; padding: 6px 10px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); color: var(--ink-2); font-size: var(--text-sm); pointer-events: none; }
+.s3d-lookcap { position: absolute; right: var(--space-3); bottom: var(--space-3); max-width: min(520px, calc(100% - 2 * var(--space-3) - 90px)); margin: 0; padding: 6px 10px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); color: var(--ink-2); font-size: var(--text-sm); pointer-events: none; }
 .s3d-lookcap strong { color: var(--ink-1); font-weight: var(--weight-bold); }
 [hidden].s3d-lookcap { display: none; }
+/* the next word: candidates with their probabilities */
+.s3d-cand { position: absolute; top: var(--space-3); right: var(--space-3); width: 248px; display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
+.s3d-cand-head { margin: 0; font-size: var(--text-sm); }
+.s3d-cand-head strong { color: var(--ink-1); font-weight: var(--weight-bold); }
+.s3d-cand-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.s3d-cand-list li { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3em; align-items: center; gap: 8px; color: var(--ink-3); font-size: var(--text-sm); }
+.s3d-cand-word { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.s3d-cand-bar { height: 6px; overflow: hidden; border-radius: 2px; background: var(--surface-well); }
+.s3d-cand-bar i { display: block; height: 100%; background: var(--act-5); }
+.s3d-cand-list li.is-chosen { color: var(--ink-1); }
+.s3d-cand-list li.is-chosen .s3d-cand-bar i { background: var(--act-8); }
+.s3d-cand-list .num { text-align: right; font-variant-numeric: tabular-nums; }
+.s3d-cand-foot { margin: 0; font-size: var(--text-xs); }
+/* view controls: spread layers or neurons, neuron size */
+.s3d-view { position: absolute; left: var(--space-3); bottom: var(--space-3); display: grid; justify-items: start; gap: 6px; }
+.s3d-viewpanel { display: grid; gap: 8px; width: 280px; padding: 10px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
+.s3d-vrow { display: grid; grid-template-columns: 8em minmax(0, 1fr) 3em; align-items: center; gap: 8px; color: var(--ink-2); font-size: var(--text-sm); }
+.s3d-vrow output { text-align: right; color: var(--ink-3); }
+.s3d-vactions { display: flex; gap: 4px; }
+.s3d-viewbtn { background: var(--surface-raised); }
+/* an edit hovered in the rail */
+.s3d-beacon { position: absolute; transform: translate(-50%, -110%); padding: 2px 8px; border-radius: 3px; background: var(--surface-raised); box-shadow: 0 0 0 1px var(--edit, var(--ink-1)); color: var(--ink-1); font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; }
+[hidden].s3d-cand, [hidden].s3d-viewpanel, [hidden].s3d-beacon { display: none; }
 /* a neuron's wiring, inside its popover */
 .s3d-wiring { display: grid; gap: var(--space-1); }
 .s3d-wiring-list { display: flex; flex-wrap: wrap; gap: 2px; }

@@ -18,9 +18,23 @@ import { state } from "../store.js";
 import { closePopover, openEditPopover } from "../components.js";
 import { fmt, h, quoteTok, showToken, svgNS } from "../util.js";
 
-const SP = 0.03; // neuron spacing on a sheet
+const SP = 0.03; // neuron spacing the sheet geometry is built at (the View sliders rescale it)
 const COLS = 64;
-const GAP = 0.32; // between sheets
+// what the View sliders change; remembered per browser
+const LAYOUT = { gap: 0.22, sp: 0.03, size: 0.036 };
+const LAYOUT_KEY = "lobotomy-3d-layout";
+function loadLayout() {
+  try {
+    const v = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "null");
+    if (v && typeof v === "object") return { ...LAYOUT, ...v };
+  } catch {}
+  return { ...LAYOUT };
+}
+function saveLayout() {
+  try {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(V.layout));
+  } catch {}
+}
 const LINES = 48; // lines per layer, at most
 const LAYERS_PER_SECOND = 16; // at 1x a word takes 1.5 s to climb 24 layers
 const SPEEDS = [
@@ -119,16 +133,17 @@ const POINT_VS = /* glsl */ `
   attribute float act;   // 0..1, how hard it fired against its layer's usual range
   attribute float birth; // when it lit up, for the pop
   attribute float edit;  // editCode
-  uniform float uScale, uSize, uTime, uMotion;
-  varying float vAct, vEdit;
+  uniform float uScale, uSize, uTime, uMotion, uFogNear, uFogFar;
+  varying float vAct, vEdit, vFog;
   void main() {
     vAct = act;
     vEdit = edit;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
+    vFog = smoothstep(uFogNear, uFogFar, -mv.z); // the far side of the tower recedes
     float pop = 1.0 + 1.4 * act * exp(-max(0.0, uTime - birth) * 5.0) * uMotion;
     float breathe = 1.0 + 0.14 * act * sin(uTime * 3.5 + position.x * 41.0 + position.z * 29.0) * uMotion;
-    float s = (0.45 + 1.7 * act) * pop * breathe;
+    float s = (0.55 + 1.6 * act) * pop * breathe;
     if (edit > 0.5) s = max(s, 1.5);
     gl_PointSize = max(1.0, uSize * s * uScale / -mv.z);
   }`;
@@ -136,7 +151,7 @@ const POINT_FS = /* glsl */ `
   uniform sampler2D uRamp, uEdits;
   uniform vec3 uBg;
   uniform float uDim;
-  varying float vAct, vEdit;
+  varying float vAct, vEdit, vFog;
   vec3 ramp(float a) { return texture2D(uRamp, vec2((clamp(a, 0.0, 1.0) * 8.0 + 0.5) / 16.0, 0.5)).rgb; }
   void main() {
     vec2 d = gl_PointCoord - 0.5;
@@ -153,14 +168,14 @@ const POINT_FS = /* glsl */ `
         c = e; // the ring is you, the fill is the model
       }
     }
-    gl_FragColor = vec4(mix(uBg, c, uDim), 1.0);
+    gl_FragColor = vec4(mix(mix(uBg, c, uDim), uBg, vFog * 0.6), 1.0);
   }`;
 
 const LINE_VS = /* glsl */ `
   attribute vec3 aEnd;
   attribute float aStrength, aBirth;
-  uniform float uTime, uGrow;
-  varying float vY, vS;
+  uniform float uTime, uGrow, uFogNear, uFogFar;
+  varying float vY, vS, vFog;
   void main() {
     float g = clamp((uTime - aBirth) / uGrow, 0.0, 1.0);
     g = 1.0 - (1.0 - g) * (1.0 - g) * (1.0 - g);
@@ -172,13 +187,15 @@ const LINE_VS = /* glsl */ `
     vec3 p = ax * (position.y * len * g) + side * (position.x * r) + up * (position.z * r);
     vY = position.y * g;
     vS = aStrength;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    vFog = smoothstep(uFogNear, uFogFar, -mv.z);
+    gl_Position = projectionMatrix * mv;
   }`;
 const LINE_FS = /* glsl */ `
   uniform sampler2D uRamp;
   uniform vec3 uBg;
   uniform float uTime, uDim, uMotion;
-  varying float vY, vS;
+  varying float vY, vS, vFog;
   vec3 ramp(float a) { return texture2D(uRamp, vec2((clamp(a, 0.0, 1.0) * 8.0 + 0.5) / 16.0, 0.5)).rgb; }
   void main() {
     vec3 c = ramp(0.3 + 0.62 * vS);
@@ -186,7 +203,7 @@ const LINE_FS = /* glsl */ `
     float f = fract(vY * 2.5 - uTime * 1.3);
     float band = smoothstep(0.0, 0.06, f) * (1.0 - smoothstep(0.06, 0.32, f));
     c = mix(c, ramp(1.0), band * (0.35 + 0.5 * vS) * uMotion);
-    gl_FragColor = vec4(mix(uBg, c, uDim), 1.0);
+    gl_FragColor = vec4(mix(mix(uBg, c, uDim), uBg, vFog * 0.6), 1.0);
   }`;
 
 const SPINE_VS = /* glsl */ `
@@ -304,7 +321,7 @@ function build() {
   renderer.setClearColor(0x000000, 0);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 200);
-  const home = { pos: new THREE.Vector3(8.8, 7.0, 8.8), target: new THREE.Vector3(0, 0.15, 0) };
+  const home = { pos: new THREE.Vector3(8.0, 6.3, 6.5), target: new THREE.Vector3(0.75, 0.55, -0.75) };
   camera.position.copy(home.pos);
   const controls = new OrbitControls(camera, canvas);
   controls.target.copy(home.target);
@@ -320,6 +337,9 @@ function build() {
     uRamp: { value: paletteTexture(colours.act, 16) },
     uEdits: { value: paletteTexture(editPalette(colours), 16) },
     uBg: { value: rawVec3(colours.well) },
+    uSize: { value: LAYOUT.size },
+    uFogNear: { value: 8 },
+    uFogFar: { value: 20 },
   };
 
   // the neurons' places on a sheet (row-major, like the 2D grid)
@@ -339,7 +359,7 @@ function build() {
   const layers = [];
   for (let l = 0; l < L; l++) {
     const g = new THREE.Group();
-    g.position.set(0, (l - (L - 1) / 2) * GAP, 0);
+    g.position.set(0, (l - (L - 1) / 2) * LAYOUT.gap, 0);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", localAttr);
     const act = new Float32Array(N);
@@ -353,7 +373,7 @@ function build() {
     for (const [k, a] of Object.entries(attrs)) geo.setAttribute(k, a);
     geo.computeBoundingSphere();
     const pmat = new THREE.ShaderMaterial({
-      uniforms: { ...uni, uSize: { value: 0.026 }, uDim: { value: 1 } },
+      uniforms: { ...uni, uDim: { value: 1 } },
       vertexShader: POINT_VS,
       fragmentShader: POINT_FS,
     });
@@ -395,7 +415,11 @@ function build() {
 
     g.add(points, plate, edge, lines, heads, hl.mesh);
     world.add(g);
-    const label = h("span", { class: "s3d-lbl" }, attn ? `${l} attn` : `${l}`);
+    // the label: layer number, then (once the word reaches it) this layer's best
+    // guess for the next word, and a bar for how sure it already was of the real one
+    const labelBar = h("i", { class: "s3d-lbar" });
+    const labelGuess = h("span", { class: "s3d-guess" });
+    const label = h("span", { class: "s3d-lbl" }, h("b", {}, attn ? `${l} attn` : `${l}`), labelBar, labelGuess);
     labelsEl.append(label);
     const homePose = { pos: g.position.clone(), quat: g.quaternion.clone() };
     layers.push({
@@ -417,6 +441,8 @@ function build() {
       pmat,
       lmat,
       label,
+      labelBar,
+      labelGuess,
       home: homePose,
       target: { pos: homePose.pos.clone(), quat: homePose.quat.clone() },
       dim: 1,
@@ -499,6 +525,41 @@ function build() {
   lookCap.hidden = true;
   stage.append(lookCap);
 
+  // the next word: the candidates the model weighed, with their probabilities
+  const cand = h("div", { class: "s3d-cand", "aria-live": "off" });
+  cand.hidden = true;
+  stage.append(cand);
+
+  // view controls: spread the layers or the neurons, neuron size
+  const viewPanel = h("div", { class: "s3d-viewpanel" });
+  viewPanel.hidden = true;
+  const viewBtn = h(
+    "button",
+    {
+      class: "btn btn-quiet btn-sm s3d-viewbtn",
+      type: "button",
+      "aria-expanded": "false",
+      onclick: () => {
+        viewPanel.hidden = !viewPanel.hidden;
+        viewBtn.setAttribute("aria-expanded", String(!viewPanel.hidden));
+      },
+    },
+    "View",
+  );
+  stage.append(h("div", { class: "s3d-view" }, viewPanel, viewBtn));
+
+  // an edit you hover in the edits rail: a beacon from it up out of the tower
+  const beaconMat = new THREE.MeshBasicMaterial({ color: colour(colours.ink1), depthTest: false, transparent: true });
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 1, 6, 1, true).translate(0, 0.5, 0), beaconMat);
+  const beaconRing = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.068, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: colour(colours.ink1), side: THREE.DoubleSide, depthTest: false, transparent: true }));
+  const beaconPlate = new THREE.Mesh(plateGeo, new THREE.MeshBasicMaterial({ color: colour(colours.ink1), side: THREE.DoubleSide, transparent: true, opacity: 0.18, depthWrite: false }));
+  beacon.renderOrder = beaconRing.renderOrder = 11;
+  beacon.visible = beaconRing.visible = beaconPlate.visible = false;
+  world.add(beacon, beaconRing);
+  const beaconLabel = h("span", { class: "s3d-beacon" });
+  beaconLabel.hidden = true;
+  labelsEl.append(beaconLabel);
+
   const view = {
     root,
     stage,
@@ -537,7 +598,23 @@ function build() {
     rowToStep: new Map(),
     selHead: null, // { l, h }
     cols: makeCols(colours),
+    cand,
+    viewPanel,
+    beacon,
+    beaconRing,
+    beaconPlate,
+    beaconLabel,
+    beaconFor: null,
+    guessCache: new Map(), // row -> per-layer lens guesses
+    guessPending: new Set(),
+    guessKey: null,
+    candKey: null,
+    layout: loadLayout(),
+    spineH0: H,
     local,
+    localAttr,
+    ROWS,
+    D,
     L,
     N,
     W,
@@ -565,7 +642,8 @@ function build() {
     escAt: 0,
   };
   V = view; // the helpers below read V
-  for (const Ly of layers) paintHeads(Ly);
+  buildViewPanel();
+  relayout();
   wirePointer();
   new ResizeObserver(resize).observe(stage);
   new MutationObserver(recolour).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
@@ -659,6 +737,8 @@ function setData(data) {
   V.rowToStep = new Map((data?.steps ?? []).map((st, i) => [st.row, i]));
   V.lookCache.clear();
   V.lookKey = null;
+  V.guessCache.clear();
+  V.guessKey = V.candKey = null;
   V.playing = false;
   for (const Ly of V.layers) Ly.shown = -2; // force a refresh
   deselect();
@@ -900,6 +980,214 @@ function syncEdits() {
   }
 }
 
+// --- layout: the View sliders -------------------------------------------------------------------
+
+function buildViewPanel() {
+  const row = (label, key, min, max, step, hint) => {
+    const out = h("output", { class: "num" });
+    const input = h("input", { type: "range", min, max, step, value: V.layout[key], "aria-label": label, title: hint });
+    const show = () => (out.textContent = key === "gap" ? `${Math.round((V.layout.gap / LAYOUT.gap) * 100)}%` : `${Math.round((V.layout[key] / LAYOUT[key]) * 100)}%`);
+    input.addEventListener("input", () => {
+      V.layout[key] = Number(input.value);
+      show();
+      relayout();
+    });
+    input.addEventListener("change", saveLayout);
+    show();
+    return h("label", { class: "s3d-vrow" }, h("span", {}, label), input, out);
+  };
+  V.viewPanel.replaceChildren(
+    row("Layer spacing", "gap", 0.08, 0.8, 0.01, "Spread the layers apart or stack them tight"),
+    row("Neuron spacing", "sp", 0.02, 0.07, 0.001, "Spread the neurons on each sheet"),
+    row("Neuron size", "size", 0.012, 0.08, 0.001, "How big each neuron is drawn"),
+    h(
+      "div",
+      { class: "s3d-vactions" },
+      h(
+        "button",
+        {
+          class: "btn btn-quiet btn-sm",
+          type: "button",
+          onclick: () => {
+            V.layout = { ...LAYOUT };
+            saveLayout();
+            buildViewPanel();
+            relayout();
+          },
+        },
+        "Defaults",
+      ),
+      h("button", { class: "btn btn-quiet btn-sm", type: "button", onclick: resetCamera }, "Reset camera"),
+    ),
+  );
+}
+
+function resetCamera() {
+  putBack();
+  V.savedView = null;
+  V.camAnim = { pos: V.home.pos.clone(), target: V.home.target.clone() };
+}
+
+// Place everything for the current layout (layer gap, neuron spacing, size).
+function relayout() {
+  const { gap, sp, size } = V.layout;
+  const L = V.L;
+  V.uni.uSize.value = size;
+  for (let i = 0; i < V.N; i++) {
+    V.local[i * 3] = ((i % COLS) - (COLS - 1) / 2) * sp;
+    V.local[i * 3 + 2] = (Math.floor(i / COLS) - (V.ROWS - 1) / 2) * sp;
+  }
+  V.localAttr.needsUpdate = true;
+  V.W = COLS * sp;
+  V.D = V.ROWS * sp;
+  const k = sp / SP;
+  ray.params.Points.threshold = sp * 0.55;
+  for (const Ly of V.layers) {
+    Ly.points.geometry.computeBoundingSphere();
+    Ly.plate.scale.set(k, 1, k);
+    Ly.edge.scale.set(k, 1, k);
+    Ly.pitch = V.W / Math.max(1, Ly.nH);
+    Ly.headPos.forEach((p, j) => p.set((j - (Ly.nH - 1) / 2) * Ly.pitch, 0, -(V.D / 2 + 0.12)));
+    Ly.home.pos.set(0, (Ly.l - (L - 1) / 2) * gap, 0);
+    if (V.sep !== Ly.l) Ly.target.pos.copy(Ly.home.pos);
+    Ly.shown = -2; // redraw the lines to the new places
+  }
+  V.beaconPlate.scale.set(k, 1, k);
+  V.ring.scale.setScalar(k);
+  V.y0 = V.layers[0].home.pos.y - 0.7;
+  V.y1 = V.layers[L - 1].home.pos.y + 0.7;
+  V.spine.scale.y = (V.y1 - V.y0) / V.spineH0;
+  V.spine.position.y = (V.y0 + V.y1) / 2;
+  if (V.selected) V.ring.position.set(V.local[V.selected.n * 3], 0.004, V.local[V.selected.n * 3 + 2]);
+  if (V.selHead) V.ring.position.set(V.layers[V.selHead.l].headPos[V.selHead.h].x, 0.18, V.layers[V.selHead.l].headPos[V.selHead.h].z);
+  V.beaconFor = null;
+  applyPos(false);
+}
+
+// --- hovering an edit in the rail: where is it? -------------------------------------------------
+
+const bp = new THREE.Vector3();
+function updateBeacon(t) {
+  const e = S.hover.edit;
+  const tg = e?.target;
+  const Ly = tg && tg.layer != null ? V.layers[tg.layer] : null;
+  const ok = Ly && (tg.kind === "neuron" || tg.kind === "head" || tg.kind === "layer") && (tg.kind !== "head" || tg.index < Ly.nH);
+  if (!ok) {
+    V.beacon.visible = V.beaconRing.visible = false;
+    V.beaconPlate.removeFromParent();
+    V.beaconLabel.hidden = true;
+    V.beaconFor = null;
+    return;
+  }
+  const c = V.cols.edit[editCode(e)] || V.cols.ramp[8];
+  if (V.beaconFor !== e.id) {
+    V.beaconFor = e.id;
+    V.beacon.material.color.copy(c);
+    V.beaconRing.material.color.copy(c);
+    V.beaconPlate.material.color.copy(c);
+    V.beaconLabel.textContent = `${e.label ?? ""}`.trim() || "edit";
+    V.beaconLabel.style.setProperty("--edit", `#${c.getHexString()}`);
+  }
+  // the spot: the neuron, the head tile, or the middle of the sheet
+  if (tg.kind === "neuron") bp.set(V.local[tg.index * 3], 0, V.local[tg.index * 3 + 2]);
+  else if (tg.kind === "head") bp.copy(Ly.headPos[tg.index]).setY(0.05);
+  else bp.set(0, 0, 0);
+  Ly.g.localToWorld(bp);
+  const top = Math.max(V.y1 + 0.6, bp.y + 0.6);
+  V.beacon.position.copy(bp);
+  V.beacon.scale.y = top - bp.y;
+  V.beacon.visible = true;
+  const pulse = 1 + 0.35 * Math.sin(t * 6);
+  V.beaconRing.visible = tg.kind !== "layer";
+  V.beaconRing.position.copy(bp);
+  V.beaconRing.quaternion.copy(Ly.g.quaternion);
+  V.beaconRing.scale.setScalar(pulse * (V.layout.sp / SP));
+  if (tg.kind === "layer") {
+    if (V.beaconPlate.parent !== Ly.g) Ly.g.add(V.beaconPlate);
+    V.beaconPlate.material.opacity = 0.14 + 0.1 * Math.sin(t * 6);
+  } else V.beaconPlate.removeFromParent();
+  V.beaconLabel.hidden = false;
+  place(V.beaconLabel, new THREE.Vector3(bp.x, top, bp.z), 36);
+}
+
+// --- word probabilities: the candidates, and each layer's guess (logit lens) ---------------------
+
+function wantGuess(row) {
+  const d = V.data;
+  if (row == null || !d || d.live || d.replyId == null) return;
+  if (V.guessCache.has(row) || V.guessPending.has(row)) return;
+  const replyId = d.replyId;
+  V.guessPending.add(row);
+  api
+    .guess(replyId, row)
+    .then((g) => V.data?.replyId === replyId && V.guessCache.set(row, g))
+    .catch(() => {})
+    .finally(() => V.guessPending.delete(row));
+}
+
+function updateWords() {
+  const d = V.data;
+  const n = nSteps();
+  const { t, l } = cur();
+  const st = n ? d.steps[t] : null;
+  // fetch this step's guesses, and the next step's while playing
+  if (st && !d.live) {
+    wantGuess(st.row);
+    if (V.playing && d.steps[t + 1]) wantGuess(d.steps[t + 1].row);
+  }
+  const g = st ? V.guessCache.get(st.row) : null;
+  const gkey = `${d?.replyId}:${t}:${l}:${g ? 1 : 0}:${V.sep}`;
+  if (gkey !== V.guessKey) {
+    V.guessKey = gkey;
+    for (const Ly of V.layers) {
+      const reached = g && (Ly.l <= l || V.sep === Ly.l);
+      const lg = reached ? g.layers[Ly.l] : null;
+      if (!lg) {
+        Ly.labelGuess.textContent = "";
+        Ly.labelBar.style.width = "0";
+        Ly.label.classList.remove("is-right");
+        continue;
+      }
+      const top = lg.top[0];
+      const right = g.next != null && top && top.text === g.next;
+      Ly.labelGuess.textContent = top ? `${quoteTok(top.text)} ${pct(top.prob)}` : "";
+      Ly.labelBar.style.width = `${Math.round((lg.p_next ?? 0) * 36)}px`;
+      Ly.label.classList.toggle("is-right", !!right);
+      Ly.label.title = g.next != null ? `Layer ${Ly.l} gave ${quoteTok(g.next)} ${pct(lg.p_next ?? 0)}` : "";
+    }
+  }
+  // the candidates card
+  const ckey = `${d?.replyId}:${n}:${t}`;
+  if (ckey === V.candKey) return;
+  V.candKey = ckey;
+  if (!st) {
+    V.cand.hidden = true;
+    return;
+  }
+  V.cand.hidden = false;
+  const alts = st.alts?.length ? st.alts : st.says != null ? [{ text: st.says, prob: st.prob ?? 0 }] : [];
+  V.cand.replaceChildren(
+    h("p", { class: "s3d-cand-head" }, h("strong", {}, "Next word"), h("span", { class: "meta" }, st.reads == null ? " after your message" : ` after ${quoteTok(st.reads)}`)),
+    alts.length
+      ? h(
+          "ol",
+          { class: "s3d-cand-list" },
+          alts.map((a) =>
+            h(
+              "li",
+              { class: a.text === st.says ? "is-chosen" : null },
+              h("span", { class: "s3d-cand-word" }, quoteTok(a.text)),
+              h("span", { class: "s3d-cand-bar" }, h("i", { style: { width: `${Math.max(1, Math.round(a.prob * 100))}%` } })),
+              h("span", { class: "num" }, pct(a.prob)),
+            ),
+          ),
+        )
+      : h("p", { class: "meta" }, st.end === "stop" ? "It stops here." : "Cut off here."),
+  );
+  V.cand.title = "The model's own probabilities for the next word. Beside each layer: its best guess so far, and a bar for how sure it already was of the word that came.";
+}
+const pct = (p) => (p >= 0.995 ? "100%" : p < 0.01 ? "<1%" : `${Math.round(p * 100)}%`);
+
 // --- frame loop ------------------------------------------------------------------------------
 
 function frame() {
@@ -941,7 +1229,7 @@ function frame() {
   // the ball rides the line at the playhead
   const n = nSteps();
   const { l, frac } = cur();
-  const y = n ? V.layers[l].home.pos.y + (l < V.L - 1 ? frac * GAP : 0) : V.y0;
+  const y = n ? V.layers[l].home.pos.y + (l < V.L - 1 ? frac * V.layout.gap : 0) : V.y0;
   V.ball.position.set(0, y, 0);
   V.ball.visible = n > 0;
   V.spineMat.uniforms.uProgress.value = n ? (y - V.y0) / (V.y1 - V.y0) : 0;
@@ -952,8 +1240,13 @@ function frame() {
     if (V.camera.position.distanceTo(V.camAnim.pos) < 0.005) V.camAnim = null;
   }
   V.controls.update();
+  const dist = V.camera.position.distanceTo(V.controls.target);
+  V.uni.uFogNear.value = dist - 1.5;
+  V.uni.uFogFar.value = dist + 7;
   updateHover();
   updateWiring();
+  updateBeacon(V.uni.uTime.value);
+  updateWords();
   V.renderer.render(V.scene, V.camera);
   placeLabels();
   V.tl.head();
@@ -961,7 +1254,7 @@ function frame() {
 }
 
 const tmp = new THREE.Vector3();
-function place(el, p) {
+function place(el, p, minTop = null) {
   tmp.copy(p).project(V.camera);
   if (tmp.z > 1 || Math.abs(tmp.x) > 1.2 || Math.abs(tmp.y) > 1.2) {
     el.style.display = "none";
@@ -969,11 +1262,12 @@ function place(el, p) {
   }
   el.style.display = "";
   el.style.left = `${(tmp.x * 0.5 + 0.5) * V.stage.clientWidth}px`;
-  el.style.top = `${(-tmp.y * 0.5 + 0.5) * V.stage.clientHeight}px`;
+  const y = (-tmp.y * 0.5 + 0.5) * V.stage.clientHeight;
+  el.style.top = `${minTop == null ? y : Math.max(minTop, y)}px`;
 }
 const labelAt = new THREE.Vector3();
 function placeLabels() {
-  labelAt.set(V.W / 2 + 0.16, 0, 0);
+  labelAt.set(V.W / 2 + 0.22, 0, -(V.D / 2 + 0.12)); // past the end of the head row
   for (const Ly of V.layers) {
     place(Ly.label, labelAt.clone().applyMatrix4(Ly.g.matrixWorld));
     Ly.label.classList.toggle("is-hot", V.hover === Ly.l || V.sep === Ly.l);
@@ -989,7 +1283,14 @@ function placeLabels() {
 }
 function sayText(st) {
   if (st.says == null) return st.end === "stop" ? "(stops)" : "…";
-  return `${quoteTok(st.says)}${st.prob != null ? `  ${Math.round(st.prob * 100)}%` : ""}`;
+  const p = modelProb(st);
+  return `${quoteTok(st.says)}${p != null ? `  ${pct(p)}` : ""}`;
+}
+// The model's own probability for the word it wrote (the candidates list),
+// not the sampler's after temperature, top-k and top-p.
+function modelProb(st) {
+  const a = st.alts?.find((x) => x.text === st.says);
+  return a ? a.prob : st.prob;
 }
 
 // --- pointer: hover, pull a layer out, pick a neuron -----------------------------------------
@@ -1531,7 +1832,7 @@ function buildTimeline() {
       st.reads == null ? "reads your message" : `reads ${quoteTok(st.reads)}`,
       " → ",
       st.says == null ? (st.end === "stop" ? "stops" : "…") : `says ${quoteTok(st.says)}`,
-      st.prob != null ? ` (${Math.round(st.prob * 100)}%)` : "",
+      modelProb(st) != null ? ` (${pct(modelProb(st))})` : "",
     );
   }
   function head() {

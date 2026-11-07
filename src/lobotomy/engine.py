@@ -692,6 +692,11 @@ class Engine:
                     "says": toks[nxt]["text"] if nxt < len(toks) else None,
                     "prob": reply.token_probs[says_pos] if 0 <= says_pos < len(reply.token_probs) else None,
                     "end": reply.finish_reason if nxt >= len(toks) else None,
+                    # the candidates the model weighed for this word (top 5, before sampling)
+                    "alts": [
+                        {"text": self.tokenizer.token_str(int(a)), "prob": float(p)}
+                        for a, p in (reply.alternatives[says_pos] if 0 <= says_pos < len(reply.alternatives) else [])
+                    ],
                 }
             )
         scale = np.maximum(np.asarray(reply.layer_refs(), np.float32), 1e-6)
@@ -758,6 +763,36 @@ class Engine:
         ids, probs = self.backend.unembed_topk(vecs, k=k)
         tok = self.tokenizer
         return [[(tok.token_str(int(i)), float(p)) for i, p in zip(ri, rp)] for ri, rp in zip(ids, probs)]
+
+    def step_lens(self, reply: Reply, row: int, k: int = 3) -> dict:
+        """The logit lens at one position: what each layer would have said next, and
+        how much probability it already gave the word that actually came next.
+        Shows where in the stack the answer appears."""
+        rec = reply.recording
+        if rec is None or rec.resid_vec is None:
+            raise ValueError("no recording")
+        if not 0 <= row < rec.n_positions:
+            raise ValueError("no such row")
+        vecs = rec.resid_vec[row]  # (L, hidden)
+        all_ids = reply.prompt_ids + reply.token_ids
+        pos = int(rec.positions[row])
+        nxt = all_ids[pos + 1] if pos + 1 < len(all_ids) else None
+        with self._lock:
+            ids, probs = self.backend.unembed_topk(vecs, k=k)
+            p_next = self.backend.lens_probs(vecs, np.full(len(vecs), nxt)) if nxt is not None else None
+        tok = self.tokenizer
+        texts = reply.recorded_tokens(tok)
+        return {
+            "row": row,
+            "next": texts[row + 1]["text"] if nxt is not None and row + 1 < len(texts) else None,
+            "layers": [
+                {
+                    "top": [{"text": tok.token_str(int(i)), "prob": float(p)} for i, p in zip(ri, rp)],
+                    "p_next": float(p_next[layer]) if p_next is not None else None,
+                }
+                for layer, (ri, rp) in enumerate(zip(ids, probs))
+            ],
+        }
 
     def neuron_vocab(self, layer: int, neuron: int, k: int = 10) -> dict:
         """Tokens a neuron pushes up and down when it fires positively (its down_proj

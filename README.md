@@ -48,6 +48,11 @@ yet, so it refuses to load them.
   (solid boosts, dashed suppresses; the list in its popover jumps there). Each
   sheet's heads are tiles along its far edge; click one to edit it. On an
   attention layer, lines run down into the timeline to the words it looked at.
+  The *Next word* card lists the candidates the model weighed, with their
+  probabilities, and beside each layer is that layer's best guess so far (the
+  logit lens), so you can watch the answer form as the word climbs. Point at an
+  edit in the edits rail and a beacon shows where it sits in the tower. *View*
+  spreads the layers or the neurons and sets the neuron size.
   The 3D / Activity / Lens switch brings back the 2D strips.
 - **Chat.** Replies stream in; every word is clickable. In *Activity* mode the
   layer stack shows one strip per layer and one cell per word, lit by how hard

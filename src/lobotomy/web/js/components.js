@@ -121,6 +121,9 @@ export function toggleTheme() {
 // pending card, so it passes false.
 export function renderRail(el, { askAgain = true } = {}) {
   clear(el);
+  // keep the hovered edit across re-renders (its row is rebuilt under the pointer)
+  const hovered = S.hover.edit && state.edits.find((x) => x.id === S.hover.edit.id);
+  S.setHoverEdit(hovered || null);
   const edits = state.edits;
   const canAsk = askAgain && state.exchanges.length && !state.busy && S.editsSince(S.lastReply());
   const fileInput = h("input", {
@@ -143,11 +146,18 @@ export function renderRail(el, { askAgain = true } = {}) {
     edits.length
       ? h(
           "ol",
-          { class: "edit-list" },
+          { class: "edit-list", onmouseleave: () => S.setHoverEdit(null) },
           edits.map((e) =>
             h(
               "li",
-              { class: "edit" },
+              {
+                class: "edit",
+                // the 3D view marks where this edit is while you point at it
+                onmouseover: () => S.setHoverEdit(e),
+                onmouseleave: () => S.setHoverEdit(null),
+                onfocusin: () => S.setHoverEdit(e),
+                onfocusout: () => S.setHoverEdit(null),
+              },
               swatch(e, true),
               h(
                 "a",

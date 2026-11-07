@@ -170,6 +170,16 @@ treat it like "pushes up": a map of where the signal is sent, not a measured
 effect. **Check:** `test_neuron_wiring_reads_the_healthy_weights` recomputes
 it with numpy.
 
+**Next word and each layer's guess.** The card lists the 5 candidates the
+model weighed for the word, with its own probabilities (the sampler's
+temperature, top-k and top-p come after). Beside each layer is the logit lens
+at that word: the residual stream after the layer, read through the final
+norm and the unembedding as if it were the last layer. Its best guess is
+shown, and the bar is the probability it already gave the word that actually
+came. **Check:** at layer 23 the bar's probability is the model's real output,
+so it matches the chosen word's percentage in the card
+(`test_step_lens_ends_at_the_real_output`).
+
 **Where attention looked.** From the word at the playhead, each attention
 head splits 100% of its attention over every earlier position. The lines go
 to the words with the largest share (averaged over the heads, or one head if
