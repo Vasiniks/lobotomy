@@ -44,10 +44,22 @@ The first start dequantizes the GGUF and caches the result in `models/.cache/`
 - **Compare.** Ask again and the answers sit side by side, with the token where
   they split marked. Ask again reuses the seed, so differences come from your
   edits.
+- **Erase a token.** Zero a token's embedding row. The embedding is shared
+  with the output layer, so the model can neither read nor say that token
+  ("The capital of France is the city of Versailles").
 - **Edits rail.** Every edit with a note on why you made it, undo, back to
   healthy, and save or load recipes as JSON. The damage meter in the top bar
   shows how far the edited model is from the healthy one (KL divergence on the
   latest reply), live while you edit.
+- **Presets.** One-click starting points: *Emoji soup* (all attention off),
+  *Broken record* (DeltaNet layers 4–6 off, so it loops), *Overexcited*,
+  *Fever dream* and *Tipsy*.
+- **Keep memory.** By default each reply re-reads the whole chat with the
+  current weights. Untick "Re-read the whole chat" to keep the model's memory
+  of earlier turns as it read them before your edits; only new words then come
+  from the broken model.
+- Shortcuts: `/` focuses the message box, ⌘Z undoes the last edit, ⌘↵ asks
+  again.
 
 ![The chat with the layer stack](docs/screenshots/chat.png)
 
@@ -119,7 +131,8 @@ src/lobotomy/
   gguf_loader.py    GGUF → float weights with Hugging Face names and conventions
   tokenizer.py      tokenizer and chat template, built from the GGUF alone
   edits.py          what you can break, and how it maps onto weights
-  engine.py         chat, ask again, edits, damage, logit lens
+  engine.py         chat, ask again, edits, damage, scans, attribution, logit lens
+  presets.py        starter recipes
   analysis.py       layer activity, top neurons, sparklines
   sampling.py       numpy sampler shared by all backends
   backends/
