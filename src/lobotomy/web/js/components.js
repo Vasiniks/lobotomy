@@ -116,10 +116,13 @@ export function toggleTheme() {
 
 // --- edits rail -------------------------------------------------------------------------
 
-export function renderRail(el) {
+// askAgain: show the rail's "Ask again" (the screen's one bone primary) when
+// something changed since the last reply. The chat view has its own in the
+// pending card, so it passes false.
+export function renderRail(el, { askAgain = true } = {}) {
   clear(el);
   const edits = state.edits;
-  const canAsk = state.exchanges.length && !state.busy;
+  const canAsk = askAgain && state.exchanges.length && !state.busy && S.editsSince(S.lastReply());
   const fileInput = h("input", {
     type: "file",
     accept: "application/json,.json",
@@ -184,7 +187,7 @@ export function renderRail(el) {
     h(
       "div",
       { class: "rail-foot" },
-      canAsk && edits.length
+      canAsk
         ? h("button", { class: "btn btn-primary", type: "button", onclick: () => S.askAgain(false) }, "Ask again")
         : null,
       edits.length ? h("button", { class: "btn", type: "button", onclick: () => S.backToHealthy() }, "Back to healthy") : null,
@@ -332,9 +335,13 @@ function placeCursor(root, i, n) {
 
 let openPop = null;
 let openAnchor = null;
+let onPopClose = null;
 export function closePopover() {
   openPop?.remove();
   openPop = null;
+  const f = onPopClose;
+  onPopClose = null;
+  f?.();
 }
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && openPop) {
@@ -363,8 +370,9 @@ function place(pop, anchor) {
 
 // The edit popover: Off, a log slider from off to x16, Boost x2, Noise, Reset.
 // Changes apply to the weights immediately; the reply changes when you ask again.
-export function openEditPopover(anchor, { target, title, sub, info, note, says, trace, sign = 1 }) {
+export function openEditPopover(anchor, { target, title, sub, info, note, says, trace, sign = 1, onClose = null }) {
   closePopover();
+  onPopClose = onClose;
   const current = () => S.editFor(target, "scale");
   const noise = () => S.editFor(target, "noise");
   const readout = h("span", { class: "readout", "aria-live": "polite" });
@@ -538,7 +546,7 @@ export function openSettings(anchor) {
     h(
       "div",
       { class: "popover-actions" },
-      h("button", { class: "btn btn-primary", type: "submit" }, "Save"),
+      h("button", { class: "btn", type: "submit" }, "Save"),
       h("button", { class: "btn btn-quiet", type: "button", onclick: () => S.newChat().then(closePopover) }, "New chat"),
     ),
     h("p", { class: "meta" }, "Ask again reuses the first answer's seed, so a different answer comes from your edits, not from luck."),

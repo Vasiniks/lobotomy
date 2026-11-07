@@ -3,7 +3,7 @@
 import * as S from "../store.js";
 import { state } from "../store.js";
 import { placeRowCursor, renderRail, renderStrips, swatch } from "../components.js";
-import { clear, fmt, h } from "../util.js";
+import { clear, fmt, h, splitLead } from "../util.js";
 
 let showCost = false;
 // The chat pane is rebuilt on state changes; keep what the user was typing.
@@ -19,7 +19,9 @@ export function renderChat(section, { selected = null } = {}) {
   for (const ex of state.exchanges) {
     transcript.append(h("article", { class: "msg msg-user" }, h("div", { class: "who" }, "You"), h("p", { class: "msg-body" }, ex.user)));
     const streaming = state.streaming && (state.streaming.exchangeId === ex.id || (ex.id === null && state.streaming));
-    const r = ex.replies[ex.replies.length - 1];
+    // Normally the newest answer; in the word view, the answer the word is from.
+    const picked = selected ? ex.replies.find((x) => x.id === selected.replyId) : null;
+    const r = picked ?? ex.replies[ex.replies.length - 1];
     if (streaming && (ex === state.exchanges[state.exchanges.length - 1])) {
       transcript.append(streamingMsg());
     } else if (r) {
@@ -139,20 +141,24 @@ function modelMsg(ex, r, selected) {
     body = h(
       "p",
       { class: "msg-body" },
-      toks.map((t) =>
-        h(
-          "span",
-          {
-            class: `tok${selected && selected.replyId === r.id && selected.row === t.row ? " is-selected" : ""}`,
-            dataset: { row: t.row },
-            title: t.prob != null ? `p = ${fmt(t.prob, 3)}` : null,
-            onclick: () => (location.hash = `#/token/${r.id}/${t.row}`),
-            onmouseenter: () => r.id === S.lastReply()?.id && hoverRow(t.row),
-            onmouseleave: () => hoverRow(null),
-          },
-          t.text,
-        ),
-      ),
+      toks.map((t) => {
+        const [lead, word] = splitLead(t.text);
+        return [
+          lead,
+          h(
+            "span",
+            {
+              class: `tok${selected && selected.replyId === r.id && selected.row === t.row ? " is-selected" : ""}`,
+              dataset: { row: t.row },
+              title: t.prob != null ? `p = ${fmt(t.prob, 3)}` : null,
+              onclick: () => (location.hash = `#/token/${r.id}/${t.row}`),
+              onmouseenter: () => r.id === S.lastReply()?.id && hoverRow(t.row),
+              onmouseleave: () => hoverRow(null),
+            },
+            word,
+          ),
+        ];
+      }),
     );
   } else {
     body = h("p", { class: "msg-body" }, r.text);
@@ -220,7 +226,7 @@ export function renderStack(section) {
           h(
             "button",
             {
-              class: "btn btn-sm",
+              class: "btn",
               type: "button",
               "aria-pressed": String(showCost),
               title: "Cut each layer alone and measure how much this reply would change",
@@ -258,6 +264,12 @@ export function renderStack(section) {
       h("p", { class: "stack-empty" }, "The layers light up after the first reply. Each of the 24 strips shows how hard that layer fired on every word the model wrote."),
       legend(),
     );
+    return;
+  }
+  if (!detail) {
+    // the reply's activity is still loading (ensureDetail re-renders when it lands)
+    section.append(h("p", { class: "stack-empty" }, "Loading the layers for this reply…"), legend());
+    S.ensureDetail(last.id).then(() => S.emit()).catch(() => {});
     return;
   }
   section.append(wrap);
@@ -319,5 +331,5 @@ export function renderChatView(body) {
   body.append(chat, stack, rail);
   renderChat(chat);
   renderStack(stack);
-  renderRail(rail);
+  renderRail(rail, { askAgain: false });
 }

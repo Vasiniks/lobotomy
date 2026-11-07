@@ -2,10 +2,10 @@
    Same rules: only tokens, no new hues. */
 
 /* noise edits have no pole: neutral edit colour, dashed ring */
-.edit-noise { --edit: var(--edit-none); }
+.edit-noise { --edit: var(--ink-3); }
 .swatch.edit-noise {
-  background: repeating-linear-gradient(135deg, var(--edit-none) 0 2px, transparent 2px 4px);
-  box-shadow: inset 0 0 0 1px var(--edit-none);
+  background: repeating-linear-gradient(135deg, var(--ink-3) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--ink-3);
 }
 .ngrid i.edit-noise, .head.edit-noise {
   box-shadow: 0 0 0 var(--edit-gap) var(--surface-well), 0 0 0 calc(var(--edit-gap) + var(--edit-ring)) var(--ink-3);
@@ -15,7 +15,6 @@
 
 /* ---------------------------------------------------------------- shell */
 .topbar .brand img { height: 19px; }
-.topbar .btn-quiet { height: 30px; }
 .health.is-healthy { color: var(--ink-3); }
 .damage { display: flex; align-items: baseline; gap: var(--space-1); font-size: var(--text-sm); color: var(--ink-2); }
 .damage b { font-family: var(--font-mono); font-weight: var(--weight-regular); color: var(--ink-1); }
@@ -51,7 +50,7 @@
 .strip .heat i { transition: background var(--dur-base) var(--ease-out); }
 .strip-cost { display: grid; grid-template-columns: 1fr; gap: 2px; text-align: right; font-size: var(--text-xs); color: var(--ink-1); font-family: var(--font-mono); }
 .strip-cost .bar { height: 3px; background: var(--surface-well); border-radius: 1px; position: relative; }
-.strip-cost .bar b { position: absolute; inset: 0 0 0 auto; background: var(--ink-2); border-radius: 1px; }
+.strip-cost .bar b { position: absolute; inset: 0 auto 0 0; background: var(--ink-2); border-radius: 1px; }
 .stack-wrap.has-cost { --strip-cols: 22px 66px minmax(0, 1fr) 46px 48px 64px; }
 .stack-tools { display: flex; gap: var(--space-2); align-items: center; margin-left: auto; }
 .stack-empty { padding: var(--space-6) var(--space-5); color: var(--ink-3); font-size: var(--text-sm); max-width: 52ch; }
@@ -66,7 +65,6 @@
 .list tr:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: -2px; }
 .list tr:focus-visible .row-actions, .list tr:focus-within .row-actions { opacity: 1; }
 .list td.cost { font-family: var(--font-mono); font-size: var(--text-xs); text-align: right; }
-.layer-tools .btn { height: 30px; }
 .scan-note { font-size: var(--text-xs); color: var(--ink-3); max-width: 60ch; }
 
 /* ---------------------------------------------------------------- popover */
@@ -82,7 +80,7 @@
 .popover .trace line { stroke: var(--rule-strong); stroke-width: 1; }
 .popover .close { position: absolute; top: var(--space-2); right: var(--space-2); }
 .popover .seg { width: max-content; }
-.popover-actions .btn[aria-pressed="true"] { border-color: var(--edit-down-4); }
+
 
 /* ---------------------------------------------------------------- token view */
 .lens { display: grid; gap: 2px; font-size: var(--text-xs); }
@@ -93,7 +91,9 @@
 .alts { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-xs); color: var(--ink-3); }
 .alts code { font-family: var(--font-mono); color: var(--ink-1); background: var(--surface-well); padding: 0 4px; border-radius: 2px; }
 
-.why { display: grid; gap: var(--space-3); max-width: 760px; padding: var(--space-4); border: var(--rule-width) solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-panel); }
+.why { display: grid; gap: var(--space-3); max-width: 760px; padding: var(--space-4) 0 0; border-top: var(--rule-width) solid var(--rule); }
+.why-results { display: grid; gap: var(--space-3); }
+.why .list .bar b { background: var(--ink-2); }
 .why .btn { width: max-content; }
 .why .list td:nth-child(2) { color: var(--ink-3); font-size: var(--text-xs); }
 .why-actions { display: flex; gap: var(--space-2); align-items: center; }
@@ -123,11 +123,13 @@
   position: fixed; left: 50%; bottom: var(--space-5); transform: translateX(-50%); z-index: var(--z-toast);
   padding: var(--space-2) var(--space-4); border-radius: var(--radius-control);
   background: var(--surface-raised); color: var(--ink-1); font-size: var(--text-sm);
-  box-shadow: var(--shadow-popover); opacity: 0; pointer-events: none; transition: opacity var(--dur-quick) var(--ease-out);
+  box-shadow: 0 0 0 1px var(--rule-strong); opacity: 0; pointer-events: none; transition: opacity var(--dur-quick) var(--ease-out);
   max-width: min(560px, calc(100vw - 32px));
 }
 .toast.is-on { opacity: 1; }
-.toast.is-error { border-left: 3px solid var(--status-rule); }
+/* Errors (DESIGN.md): bone text, a strong rule and the word "Error". The rule
+   goes all the way round, not as a side accent. */
+.toast.is-error { box-shadow: 0 0 0 1px var(--status-rule); }
 
 .visually-hidden-file { display: none; }
 
@@ -135,3 +137,17 @@
 .presets li { display: grid; gap: var(--space-1); }
 .presets .btn { width: max-content; }
 .presets .meta { font-size: var(--text-xs); }
+
+/* heads print their raw value (DESIGN.md: always print the raw value) */
+.head-cost { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-2); }
+
+/* 390px: keep the top bar on one line */
+.model strong { white-space: nowrap; }
+@media (max-width: 760px) {
+  .topbar .model, .topbar .damage { display: none; }
+  .stack-wrap.has-cost { --strip-cols: 20px 0 minmax(0, 1fr) 40px 36px 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-busy .status-dot, .msg-model.is-streaming .msg-body::after { animation: none; }
+}

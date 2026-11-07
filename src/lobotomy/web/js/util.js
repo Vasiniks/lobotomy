@@ -164,3 +164,22 @@ export function showLoading(body, viewKey) {
     }
   }, 10000);
 }
+
+// A token quoted in running text: trimmed, no visible-space marks (those are
+// for mono token displays). Falls back to the marked form for whitespace tokens.
+export function quoteTok(t) {
+  const s = String(t ?? "");
+  return `“${s.trim() || showToken(s)}”`;
+}
+
+// Head values inside a head cell: two decimals, no leading zero (".31").
+export function fmtHead(v) {
+  if (!Number.isFinite(v)) return "";
+  return v >= 10 ? v.toFixed(0) : v.toFixed(2).replace(/^0\./, ".");
+}
+
+// Split a token's leading whitespace off, so a highlight box hugs the word.
+export function splitLead(text) {
+  const m = /^(\s+)(\S[\s\S]*)$/.exec(text);
+  return m ? [m[1], m[2]] : ["", text];
+}

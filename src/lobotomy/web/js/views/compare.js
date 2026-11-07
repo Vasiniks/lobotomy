@@ -3,7 +3,7 @@
 import * as S from "../store.js";
 import { state } from "../store.js";
 import { renderRail, renderStrips, swatch } from "../components.js";
-import { clear, h } from "../util.js";
+import { clear, h, splitLead } from "../util.js";
 
 const picks = new Map(); // exchangeId -> [leftReplyId, rightReplyId]
 
@@ -54,13 +54,14 @@ export async function renderCompareView(body, exchangeId) {
       h(
         "p",
         { class: "msg-body" },
-        toks.map((t, i) =>
-          h("span", { class: `tok${i === split && !identical ? " is-split" : ""}` }, t.text),
-        ),
+        toks.map((t, i) => {
+          const [lead, word] = splitLead(t.text);
+          return [lead, h("span", { class: `tok${i === split && !identical ? " is-split" : ""}` }, word)];
+        }),
       ),
       (() => {
         const st = h("div", { class: "strips", "aria-label": `${label(r)}, 24 layers` });
-        renderStrips(st, d, { compact: true, edits: r.healthy ? [] : r.edits });
+        renderStrips(st, d, { compact: true, edits: r.healthy ? [] : r.edits, col: identical ? null : toks[split]?.row ?? null });
         return st;
       })(),
     );

@@ -6,7 +6,7 @@ import { state } from "../store.js";
 import { layerTypeName, renderRail, swatch } from "../components.js";
 import { renderChat } from "./chat.js";
 import { setLayerRow } from "./layer.js";
-import { actBin, clear, editValueText, fmt, h, showLoading, showToken } from "../util.js";
+import { actBin, clear, editValueText, fmt, fmtHead, h, quoteTok, showLoading, showToken } from "../util.js";
 
 const cache = new Map();
 const whyCache = new Map(); // `${reply}:${row}:${edit signature}` -> Promise
@@ -53,7 +53,7 @@ function renderWhy(replyId, d) {
     );
     return box;
   }
-  const slot = h("div", {}, h("p", { class: "meta" }, "Working…"));
+  const slot = h("div", { class: "why-results" }, h("p", { class: "meta" }, "Working…"));
   box.append(slot);
   p.then((w) => {
     clear(slot);
@@ -80,13 +80,13 @@ function renderWhy(replyId, d) {
             ? h("span", { class: "edit-tag" }, swatch(e), editValueText(e))
             : h(
                 "span",
-                { class: "row-actions", style: { opacity: 1 } },
+                { class: "row-actions" },
                 h(
                   "button",
                   {
                     class: "btn btn-sm",
                     type: "button",
-                    onclick: () => S.setScale(unitTarget(u), 0, `Pushed toward “${showToken(text)}” (est. ${fmt(u.effect, 2)}).`),
+                    onclick: () => S.setScale(unitTarget(u), 0, `Pushed toward ${quoteTok(text)} (est. ${fmt(u.effect, 2)}).`),
                   },
                   "Off",
                 ),
@@ -99,7 +99,7 @@ function renderWhy(replyId, d) {
       h(
         "p",
         { class: "meta" },
-        `The model gave “${showToken(text)}” probability ${fmt(w.prob, 2)}. Effect = estimated change in log-probability if that unit alone were switched off.`,
+        `${state.edits.length ? `With your ${state.edits.length} edit${state.edits.length === 1 ? "" : "s"}, the model now gives` : "The model gives"} ${quoteTok(text)} probability ${fmt(w.prob, 2)} at this point. Effect = estimated change in log-probability if that unit alone were switched off.`,
       ),
       h(
         "table",
@@ -121,11 +121,11 @@ function renderWhy(replyId, d) {
                     fresh.map((u) => ({
                       target: unitTarget(u),
                       value: 0,
-                      note: `Pushed toward “${showToken(text)}” (est. ${fmt(u.effect, 2)}).`,
+                      note: `Pushed toward ${quoteTok(text)} (est. ${fmt(u.effect, 2)}).`,
                     })),
                   ).then(() => S.toast("Switched off. Ask again to see if it still says it.")),
               },
-              `Make it stop saying “${text.trim() || showToken(text)}”`,
+              `Make it stop saying ${quoteTok(text)}`,
             )
           : h("p", { class: "meta" }, "All ten are already edited. Ask again to see the effect."),
       ),
@@ -147,11 +147,11 @@ function eraseButton(d) {
       type: "button",
       title: "Zero this token's embedding. It's shared with the output layer, so the model can neither read nor say this exact token (it may still spell the word another way).",
       onclick: () =>
-        S.setScale(target, 0, `Erased token “${showToken(d.token.text)}” (id ${d.token.token_id}).`).then(() =>
+        S.setScale(target, 0, `Erased token ${quoteTok(d.token.text)} (id ${d.token.token_id}).`).then(() =>
           S.toast("Erased. Ask again to see what it says instead."),
         ),
     },
-    `Erase token “${d.token.text.trim() || showToken(d.token.text)}”`,
+    `Erase token ${quoteTok(d.token.text)}`,
   );
 }
 
@@ -179,7 +179,7 @@ export async function renderTokenView(body, replyId, row) {
   const rail = h("aside", { class: "rail", "aria-label": "Edits" });
   body.append(chat, inspect, rail);
   renderChat(chat, { selected: { replyId, row } });
-  renderRail(rail);
+  renderRail(rail, { askAgain: false });
   renderInspect(inspect, data, detail, replyId);
   inspect.scrollTop = prevScroll;
 }
@@ -199,7 +199,7 @@ function renderInspect(el, d, detail, replyId) {
     meta = [
       `Token ${d.index_in_reply + 1} of ${d.n_reply_tokens}, id ${t.token_id}. `,
       own ? `The model gave it probability ${fmt(own.prob, 2)}` : "It was outside the model's top 5 (a lucky sample)",
-      alts.length ? `; the runner-up was “${showToken(alts[0].text)}” at ${fmt(alts[0].prob, 2)}.` : ".",
+      alts.length ? `; the runner-up was ${quoteTok(alts[0].text)} at ${fmt(alts[0].prob, 2)}.` : ".",
     ].join("");
   } else {
     meta = `A token of the prompt (position ${t.position}), id ${t.token_id}.`;
@@ -294,7 +294,7 @@ function renderInspect(el, d, detail, replyId) {
                     {
                       class: "btn btn-sm",
                       type: "button",
-                      onclick: () => S.setScale(target, 0, `Fired ${fmt(x.value)} on “${showToken(text)}”.`),
+                      onclick: () => S.setScale(target, 0, `Fired ${fmt(x.value)} on ${quoteTok(text)}.`),
                     },
                     "Off",
                   ),
@@ -419,7 +419,7 @@ function renderInspect(el, d, detail, replyId) {
                   rerender();
                 },
               },
-              h("span", { class: `head act-${actBin(v, headRef)}` }),
+              h("span", { class: `head act-${actBin(v, headRef)}` }, fmtHead(v)),
               h("span", { class: "head-idx num" }, String(i)),
             ),
           ),

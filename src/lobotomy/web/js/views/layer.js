@@ -4,13 +4,14 @@ import { api } from "../api.js";
 import * as S from "../store.js";
 import { state } from "../store.js";
 import { closePopover, isOpen, openEditPopover, renderRail, renderStrips, sparkline, swatch } from "../components.js";
-import { actBin, clear, editClass, editValueText, fmt, fmtCost, h, percentile, showLoading, showToken } from "../util.js";
+import { actBin, clear, editClass, editValueText, fmt, fmtCost, fmtHead, h, percentile, quoteTok, showLoading, showToken } from "../util.js";
 
 const COLS = 64;
 // A word picked in the word view: { replyId, row }. Only used while it belongs
 // to the reply the layer view shows (the latest one).
 let selected = null;
 let costOn = false;
+let openNeuronSel = null; // { layer, n } while its popover is open
 
 export function setLayerRow(replyId, row) {
   selected = replyId === null || replyId === undefined ? null : { replyId, row };
@@ -105,7 +106,7 @@ function renderLayer(section, layer, reply, detail, data, row) {
           "p",
           { class: "meta" },
           typeDesc,
-          peak ? ` Peak ${fmt(peak.peak)} on “${showToken(tokenText(detail, peak.peak_row))}”.` : "",
+          peak ? ` Peak ${fmt(peak.peak)} on ${quoteTok(tokenText(detail, peak.peak_row))}.` : "",
         ),
       ),
       h(
@@ -156,7 +157,8 @@ function renderLayer(section, layer, reply, detail, data, row) {
   for (let n = 0; n < nN; n++) {
     const e = neuronEdits.get(n);
     const el = document.createElement("i");
-    el.className = `act-${actBin(data.grid[n], ref, 1)}${e ? ` ${editClass(e)}` : ""}`;
+    const sel = openNeuronSel && openNeuronSel.layer === layer && openNeuronSel.n === n;
+    el.className = `act-${actBin(data.grid[n], ref, 1)}${e ? ` ${editClass(e)}` : ""}${sel ? " is-selected" : ""}`;
     el.dataset.n = n;
     frag.append(el);
   }
@@ -202,8 +204,9 @@ function renderLayer(section, layer, reply, detail, data, row) {
           title: `Head ${i}: output size ${fmt(v, 3)}${c ? `; cut cost ${fmtCost(c.mean_kl)}` : ""}`,
           onclick: (ev) => openHead(ev.currentTarget, layer, i, attn, v),
         },
-        h("span", { class: `head act-${actBin(v, headRef)}${e ? ` ${editClass(e)}` : ""}` }, c ? (c.mean_kl >= 0.01 ? c.mean_kl.toFixed(2) : "0") : ""),
+        h("span", { class: `head act-${actBin(v, headRef)}${e ? ` ${editClass(e)}` : ""}` }, e?.value === 0 ? "" : fmtHead(v)),
         h("span", { class: "head-idx num" }, String(i)),
+        c ? h("span", { class: "head-cost", title: "Cut cost (KL, nats)" }, fmtCost(c.mean_kl)) : null,
       );
     }),
   );
@@ -315,7 +318,7 @@ function renderLayer(section, layer, reply, detail, data, row) {
           h("span", { class: "meta" }, `${COLS} × ${nRows}, one cell each, ${rowsMode === "reply" ? "strongest value over the reply" : "value on this word"}. ${data.n_above} fired above 1.0.`),
         ),
         gridFrame,
-        h("h2", { class: "sub" }, "Heads ", h("span", { class: "meta" }, costH ? "numbers are cut cost" : rowsMode === "reply" ? "output size over the reply" : "output size on this word")),
+        h("h2", { class: "sub" }, "Heads ", h("span", { class: "meta" }, `${rowsMode === "reply" ? "output size over the reply" : "output size on this word"}${costH ? "; cut cost below each" : ""}`)),
         heads,
       ),
       h(
@@ -341,7 +344,7 @@ function renderLayer(section, layer, reply, detail, data, row) {
 }
 
 function neuronNote(t, detail) {
-  return t ? `Fired ${fmt(t.peak)} on “${showToken(tokenText(detail, t.peak_row))}”.` : "";
+  return t ? `Fired ${fmt(t.peak)} on ${quoteTok(tokenText(detail, t.peak_row))}.` : "";
 }
 
 function switchRows(layer) {
@@ -354,18 +357,25 @@ function openNeuron(anchor, layer, n, reply, detail, data, top) {
   const t = top ?? data.top.find((x) => x.neuron === n);
   const info = api.neuron(reply.id, layer, n);
   const note = t ? neuronNote(t, detail) : `Average ${fmt(data.grid[n], 3)} over the reply.`;
+  const markCell = (on) => document.querySelector(`.ngrid i[data-n="${n}"]`)?.classList.toggle("is-selected", on);
   const pop = openEditPopover(anchor, {
+    onClose: () => {
+      openNeuronSel = null;
+      markCell(false);
+    },
     target: { kind: "neuron", layer, index: n },
     title: `Neuron ${n}`,
     sub: `layer ${layer}`,
     info: t
-      ? `Peak ${fmt(t.peak)} on “${showToken(tokenText(detail, t.peak_row))}”. Above 1.0 on ${t.n_above} of the recorded tokens.`
+      ? `Peak ${fmt(t.peak)} on ${quoteTok(tokenText(detail, t.peak_row))}. Above 1.0 on ${t.n_above} of the recorded tokens.`
       : `Strongest size ${fmt(data.grid[n], 3)} over the reply.`,
     note,
     says: info.then((x) => x.says),
     trace: null,
     sign: t ? Math.sign(t.peak) || 1 : Math.sign(data.signed[n]) || 1,
   });
+  openNeuronSel = { layer, n };
+  markCell(true);
   // add the trace to this popover once it arrives (if it's still open)
   info
     .then((x) => {
