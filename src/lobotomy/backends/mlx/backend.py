@@ -8,7 +8,7 @@ import mlx.core as mx
 from ...config import ModelConfig
 from ...edits import SliceOp, is_gain_norm
 from ..base import Backend, RecordSpec, Recording
-from .model import Qwen35, Recorder
+from .model import AttnCache, DeltaCache, Qwen35, Recorder
 
 _DTYPES = {"bfloat16": mx.bfloat16, "float16": mx.float16, "float32": mx.float32}
 
@@ -96,6 +96,33 @@ class MLXBackend(Backend):
 
     def cache_length(self, cache) -> int:
         return cache[0].offset
+
+    def snapshot_cache(self, cache):
+        """An independent copy of the cache (KV for attention, state for DeltaNet)."""
+        snap = []
+        for c in cache:
+            if isinstance(c, AttnCache):
+                if c.keys is None:
+                    snap.append(("attn", None, None, 0))
+                else:
+                    k = mx.contiguous(c.keys[..., : c.offset, :] * 1)
+                    v = mx.contiguous(c.values[..., : c.offset, :] * 1)
+                    snap.append(("attn", k, v, c.offset))
+            else:
+                snap.append(("delta", c.conv, c.ssm, c.offset))  # replaced, never mutated in place
+        mx.eval([x for s in snap for x in s[1:3] if x is not None])
+        return snap
+
+    def restore_cache(self, snap):
+        cache = []
+        for kind, a, b, off in snap:
+            c = AttnCache() if kind == "attn" else DeltaCache()
+            if kind == "attn":
+                c.keys, c.values, c.offset = a, b, off
+            else:
+                c.conv, c.ssm, c.offset = a, b, off
+            cache.append(c)
+        return cache
 
     def forward(self, token_ids, cache, record: RecordSpec | None = None):
         offset = self.cache_length(cache)

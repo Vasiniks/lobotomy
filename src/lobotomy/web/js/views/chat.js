@@ -36,12 +36,22 @@ export function renderChat(section, { selected = null } = {}) {
             "p",
             {},
             h("strong", {}, state.edits.length ? `${state.edits.length} edit${state.edits.length === 1 ? "" : "s"} since this reply.` : "Edits removed since this reply."),
-            " Ask again to see what they change. The whole chat is re-read with the current weights.",
+            " Ask again to see what they change.",
           ),
           h(
             "div",
             { class: "actions" },
             h("button", { class: "btn btn-primary", type: "button", onclick: () => S.askAgain(false) }, "Ask again"),
+          ),
+          h(
+            "label",
+            { title: "Off: the model keeps its memory of the earlier chat as it read it before your edits; only the new reply uses the edited weights." },
+            h("input", {
+              type: "checkbox",
+              checked: state.settings?.reread !== false,
+              onchange: (e) => S.saveSettings({ reread: e.target.checked }),
+            }),
+            " Re-read the whole chat with the edits",
           ),
         )
       : null;
@@ -166,7 +176,9 @@ function modelMsg(ex, r, selected) {
         : r.edits.length
           ? h("span", { class: "swatches" }, r.edits.slice(0, 6).map((e) => swatch(e)), ` ${r.edits.length} edit${r.edits.length === 1 ? "" : "s"}`)
           : h("span", {}, "healthy weights"),
+      r.kept_memory ? h("span", { title: "Earlier turns were kept as read under the weights of the time" }, "kept memory") : null,
       r.finish_reason === "length" ? h("span", {}, "cut off at max tokens") : null,
+      r.finish_reason === "cancelled" ? h("span", {}, "stopped") : null,
       n > 1 ? h("a", { href: `#/compare/${ex.id}` }, `Compare ${n} answers`) : null,
     ),
   );

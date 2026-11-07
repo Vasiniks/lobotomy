@@ -46,6 +46,7 @@ export async function renderCompareView(body, exchangeId) {
         "div",
         { class: "answer-head" },
         h("h2", {}, label(r)),
+        r.kept_memory ? h("span", { class: "meta" }, "kept memory") : null,
         !r.healthy && r.edits.length ? h("span", { class: "swatches", style: { display: "flex", gap: "3px" } }, r.edits.slice(0, 8).map((e) => swatch(e))) : null,
         h("span", { class: "meta num" }, `${toks.length} tokens`),
       ),
@@ -85,7 +86,14 @@ export async function renderCompareView(body, exchangeId) {
         "div",
         {},
         h("h1", { id: "cmp-title" }, ex.user),
-        h("p", { class: "meta" }, `${replies.length} answers to this question. The whole chat was re-read with each answer's weights.`),
+        h(
+          "p",
+          { class: "meta" },
+          `${replies.length} answers to this question. `,
+          ra.kept_memory || rb.kept_memory
+            ? "Answers marked “kept memory” reused the model's earlier reading of the chat; only the answer itself used the edited weights."
+            : "The whole chat was re-read with each answer's weights.",
+        ),
       ),
       h(
         "div",

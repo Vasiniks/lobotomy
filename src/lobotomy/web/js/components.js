@@ -184,7 +184,7 @@ export function renderRail(el) {
       h(
         "p",
         { class: "meta" },
-        "Edits are written into the weights in memory. The GGUF file on disk is never changed, so undo restores the exact values.",
+        "Edits are written into the weights in memory. The GGUF file on disk is never changed, so undo restores the exact values. ⌘Z undoes the last edit; ⌘↵ asks again.",
       ),
     ),
   );
@@ -440,6 +440,7 @@ export function openSettings(anchor) {
   const num = (key, label, attrs) =>
     h("label", { class: "field" }, label, h("input", { type: "number", value: st[key], "data-key": key, ...attrs }));
   const think = h("input", { type: "checkbox", checked: st.enable_thinking });
+  const reread = h("input", { type: "checkbox", checked: st.reread !== false });
   const sys = h("textarea", { placeholder: "Optional system prompt" }, st.system_prompt ?? "");
   const form = h(
     "form",
@@ -447,7 +448,7 @@ export function openSettings(anchor) {
       class: "menu",
       onsubmit: async (e) => {
         e.preventDefault();
-        const patch = { enable_thinking: think.checked, system_prompt: sys.value };
+        const patch = { enable_thinking: think.checked, system_prompt: sys.value, reread: reread.checked };
         for (const inp of form.querySelectorAll("input[data-key]")) patch[inp.dataset.key] = Number(inp.value);
         await S.saveSettings(patch);
         closePopover();
@@ -462,6 +463,12 @@ export function openSettings(anchor) {
     num("seed", "Seed", { step: 1, min: 0 }),
     num("presence_penalty", "Presence penalty", { step: 0.1, min: 0, max: 2 }),
     h("label", { class: "field check" }, think, "Let the model think first (<think>)"),
+    h(
+      "label",
+      { class: "field check", title: "Off = keep memory: earlier turns stay as the model read them under the weights of the time" },
+      reread,
+      "Re-read the whole chat with the current weights",
+    ),
     sys,
     h(
       "div",

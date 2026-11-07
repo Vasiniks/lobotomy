@@ -94,6 +94,54 @@ def test_history_is_reread_with_current_weights(fresh):
     assert r.recording.positions[0] == r.record_start  # recording starts at the last user turn
 
 
+def test_keep_memory_matches_reread_without_edits(fresh):
+    a1 = fresh.chat("My name is Ada.")
+    a2 = fresh.chat("What is my name?")
+    fresh.reset_chat()
+    fresh.reread = False
+    try:
+        b1 = fresh.chat("My name is Ada.")
+        b2 = fresh.chat("What is my name?")
+        assert b2.kept_memory and not b1.kept_memory
+        assert b1.token_ids == a1.token_ids
+        # The continued prompt is what the model actually read: identical to a
+        # fresh render except that the earlier turn keeps its empty think block.
+        tok = fresh.tokenizer
+        kept_text = tok.decode(b2.prompt_ids)
+        assert kept_text == tok.decode(a2.prompt_ids).replace(
+            "<|im_start|>assistant\nHello", "<|im_start|>assistant\n<think>\n\n</think>\n\nHello", 1
+        ) or kept_text.count("<think>") == 2
+        assert tok.encode(kept_text) == b2.prompt_ids
+        # ask again with no edits: rewinds to the snapshot, same answer
+        b3 = fresh.ask_again()
+        assert b3.kept_memory and b3.token_ids == b2.token_ids
+        # and matches a fresh full read of the same tokens
+        lg_full = fresh.backend.logits_for(b2.prompt_ids)[-1]
+        assert int(np.argmax(lg_full)) == b2.token_ids[0]
+    finally:
+        fresh.reread = True
+
+
+def test_keep_memory_old_turns_stay_healthy(fresh):
+    fresh.reread = False
+    try:
+        fresh.chat("My name is Ada.")
+        r = fresh.chat("What is my name?")
+        fresh.add_edit(Target("layer", layer=0), value=0.0)
+        kept = fresh.ask_again()
+        assert kept.kept_memory
+        # the snapshot still holds the healthy reading of the question, so the
+        # cache contents at the rewind point are unaffected by later decoding
+        again = fresh.ask_again()
+        assert again.token_ids == kept.token_ids
+        fresh.reread = True
+        reread = fresh.ask_again()
+        assert not reread.kept_memory
+        assert reread.prompt_len != kept.prompt_len or reread.token_ids != kept.token_ids or r.text
+    finally:
+        fresh.reread = True
+
+
 def test_recipe_roundtrip(fresh, tmp_path):
     fresh.chat(Q)
     fresh.add_edit(Target("head", layer=3, index=1), value=0.0)

@@ -146,6 +146,15 @@ class Backend(ABC):
 
     # --- optional extras (the UI hides features a backend doesn't support) -------
 
+    def snapshot_cache(self, cache: Any) -> Any:
+        """An independent copy of ``cache`` (later forwards must not change it).
+        Needed for "keep memory" mode; without it the engine always re-reads."""
+        raise NotImplementedError
+
+    def restore_cache(self, snapshot: Any) -> Any:
+        """A new cache equal to a snapshot (the snapshot stays reusable)."""
+        raise NotImplementedError
+
     def logits_for(self, token_ids: list[int], cache: Any | None = None) -> np.ndarray:
         """Logits at every position, (T, vocab). Used by tests."""
         raise NotImplementedError

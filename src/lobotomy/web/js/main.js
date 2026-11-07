@@ -57,14 +57,26 @@ window.addEventListener("hashchange", () => {
 // follow the latest reply automatically (they read S.lastReply()).
 S.subscribe(render);
 
-// Keyboard: "/" focuses the message box.
+// Keyboard: "/" focuses the message box, Cmd/Ctrl+Z undoes the last edit,
+// Cmd/Ctrl+Enter asks again.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "/" && !e.target.closest("input, textarea")) {
+  const typing = e.target.closest("input, textarea");
+  const mod = e.metaKey || e.ctrlKey;
+  if (e.key === "/" && !typing) {
     const ta = document.getElementById("ask");
     if (ta) {
       e.preventDefault();
       ta.focus();
     }
+  } else if (mod && e.key.toLowerCase() === "z" && !e.shiftKey && !typing) {
+    const last = state.edits[state.edits.length - 1];
+    if (last) {
+      e.preventDefault();
+      S.undo(last.id).then(() => S.toast(`Undid ${last.label}`));
+    }
+  } else if (mod && e.key === "Enter" && state.exchanges.length && !state.busy) {
+    e.preventDefault();
+    S.askAgain(false);
   }
 });
 

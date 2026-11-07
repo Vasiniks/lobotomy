@@ -58,6 +58,7 @@ class Api:
             "healthy": r.healthy,
             "edits": r.edits,
             "finish_reason": r.finish_reason,
+            "kept_memory": r.kept_memory,
             "stats": r.stats,
             "sampling": r.sampling,
             "created": r.created,
@@ -101,7 +102,12 @@ class Api:
 
     def settings(self) -> dict:
         e = self.eng
-        return {**e.sampling.to_dict(), "enable_thinking": e.enable_thinking, "system_prompt": e.system_prompt}
+        return {
+            **e.sampling.to_dict(),
+            "enable_thinking": e.enable_thinking,
+            "system_prompt": e.system_prompt,
+            "reread": e.reread,
+        }
 
     def find(self, reply_id: int) -> Reply:
         try:
@@ -184,6 +190,8 @@ def create_app(engine: Engine) -> FastAPI:
             eng.enable_thinking = bool(body["enable_thinking"])
         if "system_prompt" in body:
             eng.system_prompt = body["system_prompt"] or None
+        if "reread" in body:
+            eng.reread = bool(body["reread"])
         return api.settings()
 
     # --- chat ----------------------------------------------------------------------

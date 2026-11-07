@@ -12,8 +12,11 @@ Each user message is an :class:`Exchange`. "Ask again" adds another
 :class:`Reply` to the latest exchange, so answers to the same question can be
 compared. The newest reply is the one the chat continues from.
 
-Every generation re-reads the whole chat with the current weights (a fresh
-cache), so the model's memory of the conversation is as broken as the model.
+By default every generation re-reads the whole chat with the current weights (a
+fresh cache), so the model's memory of the conversation is as broken as the
+model. With ``reread = False`` ("keep memory") the model keeps its memory of
+earlier turns as it built it under the weights of the time, and only new tokens
+use the current weights.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from typing import Callable, Iterator
 
 import numpy as np
 
-from .backends import RecordSpec, Recording, default_backend, get_backend
+from .backends import Backend, RecordSpec, Recording, default_backend, get_backend
 from .config import ModelConfig
 from .edits import Edit, EditStack, Target, resolve
 from .gguf_loader import open_gguf
@@ -52,6 +55,7 @@ class Reply:
     sampling: dict
     finish_reason: str  # "stop" | "length" | "cancelled"
     stats: dict
+    kept_memory: bool = False  # continued from memory built under earlier weights
     created: float = field(default_factory=time.time)
 
     @property
@@ -116,6 +120,12 @@ class Engine:
         self.system_prompt = system_prompt
         self.sampling = SamplingParams()
         self.enable_thinking = False
+        # True: every reply re-reads the whole chat with the current weights.
+        # False ("keep memory"): earlier turns stay as the model read them under
+        # the weights of the time; only new tokens use the current weights.
+        self.reread = True
+        self._mem: dict | None = None  # cache after the latest reply
+        self._ask_snap: dict | None = None  # cache just before the latest prompt's last token
         self._lock = threading.RLock()
         self._ids = {"exchange": 1, "reply": 1}
         self._cancel = threading.Event()
@@ -295,20 +305,65 @@ class Engine:
             finally:
                 self.busy = False
 
+    def _keep_memory_start(self, ex: Exchange):
+        """In keep-memory mode, the cache and prompt to continue from, or None to re-read.
+
+        Ask again rewinds to the snapshot taken just before the question's last
+        token. A new message continues from the cache left by the previous reply,
+        appending only the new turn's tokens.
+        """
+        be = self.backend
+        if ex.replies:
+            s = self._ask_snap
+            if s is not None and s["exchange_id"] == ex.id:
+                return s["prompt_ids"], be.restore_cache(s["snap"])
+            return None
+        m = self._mem
+        prev = self.exchanges[-2] if len(self.exchanges) >= 2 and self.exchanges[-1] is ex else None
+        if m is None or prev is None or prev.active is None or m["reply_id"] != prev.active.id:
+            return None
+        head = "<think>\n" if self.enable_thinking else "<think>\n\n</think>\n\n"
+        delta = self.tokenizer.encode(f"<|im_end|>\n<|im_start|>user\n{ex.user}<|im_end|>\n<|im_start|>assistant\n{head}")
+        return m["tokens"] + delta, be.restore_cache(m["snap"])
+
     def _generate_locked(self, ex: Exchange, params: SamplingParams, healthy: bool) -> Iterator[dict]:
         tok = self.tokenizer
-        prompt_ids = tok.encode_chat(self._messages(ex), add_generation_prompt=True, enable_thinking=self.enable_thinking)
+        be = self.backend
+        can_snap = type(be).snapshot_cache is not Backend.snapshot_cache
+        start = None
+        if not self.reread and not healthy and can_snap:
+            start = self._keep_memory_start(ex)
+        kept = start is not None
+        if kept:
+            prompt_ids, cache = start
+        else:
+            prompt_ids = tok.encode_chat(self._messages(ex), add_generation_prompt=True, enable_thinking=self.enable_thinking)
+            cache = be.new_cache()
         record_start = self._last_user_start(prompt_ids)
         spec = RecordSpec(start=record_start, attention=True)
-        cache = self.backend.new_cache()
         sampler = Sampler(params)
         eos = set(self.config.eos_token_ids)
-        yield {"type": "start", "exchange_id": ex.id, "prompt_tokens": len(prompt_ids), "healthy": healthy}
+        yield {
+            "type": "start",
+            "exchange_id": ex.id,
+            "prompt_tokens": len(prompt_ids),
+            "healthy": healthy,
+            "kept_memory": kept,
+        }
 
+        # Feed the prompt up to its last token, snapshot (so "ask again" can rewind
+        # here in keep-memory mode), then feed the last token.
         t0 = time.time()
-        logits, rec = self.backend.forward(prompt_ids, cache, spec)
+        parts = []
+        fed = be.cache_length(cache)
+        if len(prompt_ids) - 1 > fed:
+            _, rec = be.forward(prompt_ids[fed:-1], cache, spec)
+            parts.append(rec)
+        if can_snap:
+            self._ask_snap = {"exchange_id": ex.id, "prompt_ids": prompt_ids, "snap": be.snapshot_cache(cache)}
+        logits, rec = be.forward(prompt_ids[-1:], cache, spec)
+        parts.append(rec)
         t_prefill = time.time() - t0
-        parts = [rec]
         out_ids, texts, probs, alts = [], [], [], []
         finish = "length"
         t1 = time.time()
@@ -352,6 +407,7 @@ class Engine:
             healthy=healthy,
             sampling=params.to_dict(),
             finish_reason=finish,
+            kept_memory=kept,
             stats={
                 "prompt_tokens": len(prompt_ids),
                 "prefill_seconds": round(t_prefill, 4),
@@ -361,11 +417,16 @@ class Engine:
             },
         )
         ex.replies.append(reply)
+        if can_snap:
+            # every generated token was fed, so the cache holds prompt + reply
+            self._mem = {"reply_id": reply.id, "tokens": prompt_ids + out_ids, "snap": be.snapshot_cache(cache)}
         yield {"type": "done", "reply": reply}
 
     def reset_chat(self) -> None:
         with self._lock:
             self.exchanges.clear()
+            self._mem = None
+            self._ask_snap = None
 
     def find_reply(self, reply_id: int) -> Reply:
         for ex in self.exchanges:

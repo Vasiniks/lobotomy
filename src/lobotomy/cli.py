@@ -49,6 +49,7 @@ Type a message to chat. Commands:
 
   Settings
     /temp X | /greedy | /seed N | /max N | /think on|off | /system TEXT
+    /reread on|off             off = keep memory (old turns stay as read before your edits)
     /new                       start a new chat
     /info                      model info
     /quit
@@ -212,6 +213,13 @@ class Repl:
             eng.sampling.max_tokens = int(args[0])
         elif cmd == "think":
             eng.enable_thinking = args[0] == "on"
+        elif cmd == "reread":
+            eng.reread = args[0] != "off"
+            self.out(
+                "re-reading the whole chat with the current weights"
+                if eng.reread
+                else "keeping memory: earlier turns stay as read under the weights of the time"
+            )
         elif cmd == "system":
             eng.system_prompt = " ".join(args) or None
         elif cmd == "new":
