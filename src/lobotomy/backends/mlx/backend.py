@@ -188,6 +188,23 @@ class MLXBackend(Backend):
         mx.eval(idx, vals)
         return np.array(idx), np.exp(np.array(vals))
 
+    def lens_probs(self, vectors, targets, chunk: int = 128):
+        """Logit lens for many residual vectors at once: the probability each
+        vector (through the final norm and unembedding) gives its target token.
+        vectors: (n, hidden); targets: (n,). Chunked so the (n, vocab) logits
+        never all live at once."""
+        v_all = np.asarray(vectors, dtype=np.float32)
+        t_all = np.asarray(targets, dtype=np.int64)
+        out = np.empty(len(t_all), np.float32)
+        for a in range(0, len(t_all), chunk):
+            v = mx.array(v_all[a : a + chunk]).astype(self.dtype)
+            lg = self.model.logits(self.model._rms(v, "model.norm.weight")).astype(mx.float32)
+            tgt = mx.array(t_all[a : a + chunk])[:, None]
+            lp = mx.take_along_axis(lg, tgt, axis=-1)[:, 0] - mx.logsumexp(lg, axis=-1)
+            mx.eval(lp)
+            out[a : a + chunk] = np.exp(np.array(lp))
+        return out
+
     def damage_report(self, token_ids, start, healthy):
         pos = slice(start - 1, len(token_ids) - 1)
         target = mx.array(token_ids[start:])[:, None]

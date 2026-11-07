@@ -4,7 +4,7 @@
 import * as S from "./store.js";
 import { state } from "./store.js";
 import {
-  clear, editClass, editValueText, fmt, fmtCost, fmtScale, h, percentile, rangeBin, s, showToken, SLIDER, sliderToValue, valueToSlider,
+  clear, editClass, editValueText, fmt, fmtCost, fmtProb, fmtScale, h, percentile, rangeBin, s, showToken, SLIDER, sliderToValue, valueToSlider,
 } from "./util.js";
 
 // --- labels ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ function saveRecipe() {
 // neurons fired (relative to that layer's own range).
 
 export function renderStrips(root, detail, opts = {}) {
-  const { compact = false, selectedLayer = null, col = null, cost = null, onLayer, rows: rowsOpt, edits = null } = opts;
+  const { compact = false, selectedLayer = null, col = null, cost = null, onLayer, rows: rowsOpt, edits = null, lens = null } = opts;
   clear(root);
   root.toggleAttribute("data-compact", compact);
   const nL = state.model.n_layers;
@@ -242,13 +242,26 @@ export function renderStrips(root, detail, opts = {}) {
       const attn = state.model.layers[L].type === "attention";
       // Long replies: one cell per group of tokens (their strongest value), so
       // cells never shrink below a visible width.
-      const raw = act ? rows.map((r) => act[r][L]) : [];
-      const vals = bucketMax(raw, nCells);
-      const heat = h(
-        "span",
-        { class: `heat${vals.length ? "" : " is-empty"}` },
-        vals.map((v) => h("i", { class: `act-${rangeBin(v, vals)}`, title: compact ? null : `${fmt(v, 3)}` })),
-      );
+      let heat;
+      if (lens) {
+        // Lens mode: how sure this layer already was of the word that came next
+        // (absolute probability, so layers compare directly).
+        const raw = lens.probs.map((p) => p[L] ?? 0);
+        const vals = bucketMax(raw, nCells);
+        heat = h(
+          "span",
+          { class: `heat${vals.length ? "" : " is-empty"}` },
+          vals.map((p) => h("i", { class: `act-${p >= 0.005 ? Math.max(1, Math.round(p * 8)) : 0}`, title: compact ? null : `p = ${fmt(p, 2)}` })),
+        );
+      } else {
+        const raw = act ? rows.map((r) => act[r][L]) : [];
+        const vals = bucketMax(raw, nCells);
+        heat = h(
+          "span",
+          { class: `heat${vals.length ? "" : " is-empty"}` },
+          vals.map((v) => h("i", { class: `act-${rangeBin(v, vals)}`, title: compact ? null : `${fmt(v, 3)}` })),
+        );
+      }
       const eds = edits ? edits.filter((e) => e.target.layer === L) : S.editsInLayer(L);
       const tag = onLayer ? "button" : "a";
       const strip = h(
@@ -264,7 +277,17 @@ export function renderStrips(root, detail, opts = {}) {
         h("span", { class: "strip-idx num" }, String(L)),
         compact ? null : h("span", { class: "strip-type" }, attn ? "Attention" : "DeltaNet"),
         heat,
-        compact ? null : h("span", { class: "strip-peak num" }, peaks ? fmt(peaks[L].neuron_peak) : ""),
+        compact
+          ? null
+          : h(
+              "span",
+              { class: "strip-peak num" },
+              lens
+                ? fmtProb(lens.probs.reduce((s, p) => s + (p[L] ?? 0), 0) / Math.max(1, lens.probs.length))
+                : peaks
+                  ? fmt(peaks[L].neuron_peak)
+                  : "",
+            ),
         h(
           "span",
           { class: "strip-edit" },

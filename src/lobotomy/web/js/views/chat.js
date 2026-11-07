@@ -6,6 +6,7 @@ import { placeRowCursor, renderRail, renderStrips, swatch } from "../components.
 import { clear, fmt, h, splitLead } from "../util.js";
 
 let showCost = false;
+let stackMode = "activity"; // or "lens"
 // The chat pane is rebuilt on state changes; keep what the user was typing.
 let draft = "";
 let composerFocused = false;
@@ -210,6 +211,15 @@ export function renderStack(section) {
     });
   }
 
+  const lensMode = stackMode === "lens" && last && last.n_tokens > 0;
+  const lensGrid = lensMode ? state.lens.get(last.id) : null;
+  if (lensMode && !lensGrid) {
+    S.lens(last.id).catch(() => {
+      stackMode = "activity";
+      S.emit();
+    });
+  }
+
   const head = h(
     "div",
     { class: "pane-head" },
@@ -217,12 +227,24 @@ export function renderStack(section) {
     h(
       "p",
       { class: "meta" },
-      "One strip per layer, one cell per token of the last reply. The brighter the cell, the harder that layer fired on that token, against its own usual range. Open a strip to edit it.",
+      lensMode
+        ? "Logit lens: one cell per word of the last reply. The brighter the cell, the more sure that layer already was of the word that came next (read through the final norm and unembedding). Watch where the answer appears."
+        : "One strip per layer, one cell per token of the last reply. The brighter the cell, the harder that layer fired on that token, against its own usual range. Open a strip to edit it.",
     ),
     last
       ? h(
           "div",
           { class: "stack-tools" },
+          h(
+            "div",
+            { class: "seg", role: "group", "aria-label": "What the strips show" },
+            h("button", { type: "button", "aria-pressed": String(!lensMode), onclick: () => ((stackMode = "activity"), S.emit()) }, "Activity"),
+            h(
+              "button",
+              { type: "button", "aria-pressed": String(!!lensMode), disabled: !last.n_tokens, onclick: () => ((stackMode = "lens"), S.emit()) },
+              "Lens",
+            ),
+          ),
           h(
             "button",
             {
@@ -251,7 +273,7 @@ export function renderStack(section) {
       { class: "axis", "aria-hidden": "true" },
       h("span", { class: "axis-layer" }, "Layer"),
       h("span", { class: "axis-track" }),
-      h("span", { style: { textAlign: "right" } }, "Peak"),
+      h("span", { style: { textAlign: "right" } }, lensMode ? "Mean p" : "Peak"),
       h("span", {}, "Edits"),
       cost ? h("span", { style: { textAlign: "right" } }, "Cut cost") : null,
     ),
@@ -272,8 +294,12 @@ export function renderStack(section) {
     S.ensureDetail(last.id).then(() => S.emit()).catch(() => {});
     return;
   }
+  if (lensMode && !lensGrid) {
+    section.append(h("p", { class: "stack-empty" }, "Reading every layer's guess for every word…"), legend());
+    return;
+  }
   section.append(wrap);
-  renderStrips(strips, detail, { cost, col: state.hoverRow });
+  renderStrips(strips, detail, { cost, col: state.hoverRow, lens: lensGrid });
   strips._detail = detail;
   if (cost) {
     section.append(
@@ -284,10 +310,10 @@ export function renderStack(section) {
       ),
     );
   }
-  section.append(legend());
+  section.append(legend(lensMode));
 }
 
-export function legend() {
+export function legend(lensMode = false) {
   const m = state.model;
   const attn = m.layers.filter((l) => l.type === "attention").map((l) => l.index);
   return h(
@@ -296,9 +322,9 @@ export function legend() {
     h(
       "div",
       { class: "scale" },
-      h("span", { class: "scale-title" }, "Activity, how hard it fired"),
+      h("span", { class: "scale-title" }, lensMode ? "Lens, how sure the layer already was" : "Activity, how hard it fired"),
       h("span", { class: "scale-bar" }, Array.from({ length: 9 }, (_, i) => h("i", { class: `act-${i}` }))),
-      h("span", { class: "scale-ends" }, h("span", {}, "silent"), h("span", {}, "strongest")),
+      h("span", { class: "scale-ends" }, h("span", {}, lensMode ? "p = 0" : "silent"), h("span", {}, lensMode ? "p = 1" : "strongest")),
     ),
     h(
       "div",

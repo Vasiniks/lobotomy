@@ -184,6 +184,12 @@ class Backend(ABC):
         """
         raise NotImplementedError
 
+    def lens_probs(self, vectors: np.ndarray, targets: np.ndarray) -> np.ndarray:
+        """Logit lens in bulk: for residual vectors (n, hidden) and target token ids
+        (n,), the probability each vector gives its target after the final norm and
+        unembedding. Returns (n,) float32."""
+        raise NotImplementedError
+
     def damage_report(self, token_ids: list[int], start: int, healthy) -> dict[str, np.ndarray]:
         """Compare current weights with the healthy model on a fixed token sequence.
 

@@ -221,6 +221,23 @@ def test_why_finds_units_whose_removal_hurts_the_token(fresh):
     assert logp() < base - 1.0  # cutting the top supporters really hurts the token
 
 
+def test_lens_grid_last_layer_is_the_real_output_probability(fresh):
+    r = fresh.chat(Q)
+    g = fresh.lens_grid(r)
+    probs = np.asarray(g["probs"])
+    assert probs.shape == (len(r.token_ids), fresh.config.n_layers)
+    assert np.all((probs >= 0) & (probs <= 1))
+    # The last layer through the final norm is exactly the model's output, so it
+    # must match the probability the sampler saw (temperature 1) for each token.
+    for k, tid in enumerate(r.token_ids):
+        seen = dict(r.alternatives[k]).get(tid)
+        if seen is not None:
+            assert abs(probs[k, -1] - seen) < 0.03, (k, probs[k, -1], seen)
+    # rows line up with the recording's reply rows
+    reply_rows = [t["row"] for t in r.recorded_tokens(fresh.tokenizer) if t["role"] == "reply"]
+    assert g["rows"] == reply_rows
+
+
 def test_analysis_helpers(fresh):
     r = fresh.chat(Q)
     rows = [t["row"] for t in r.recorded_tokens(fresh.tokenizer) if t["role"] == "reply"]

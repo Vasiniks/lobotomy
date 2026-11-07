@@ -42,6 +42,10 @@ yet, so it refuses to load them.
   layer stack shows one strip per layer and one cell per word, lit by how hard
   that layer fired. **What matters here?** cuts each layer alone and shows how
   much the answer would change.
+- **Lens.** Switch the layer stack from *Activity* to *Lens*. Each cell then
+  shows how sure that layer already was of the word the model said next (the
+  logit lens), so you can see at which depth the answer appears. In 0.8B,
+  nothing shows before about layer 14.
 - **Layer.** All 3,584 MLP neurons as a 64 × 56 grid, the heads, and the
   strongest neurons with the word each peaked on. Click anything to edit it:
   off, a log slider from ×1/16 to ×16, boost, noise, reset. The popover shows
@@ -73,6 +77,8 @@ yet, so it refuses to load them.
   again.
 
 ![The chat with the layer stack](docs/screenshots/chat.png)
+
+![The layer stack in Lens mode: the answer appears from about layer 16 upward](docs/screenshots/lens.png)
 
 "Why this word?" on *Canberra*, then *Make it stop saying "Canberra"*, then
 *Ask again*:

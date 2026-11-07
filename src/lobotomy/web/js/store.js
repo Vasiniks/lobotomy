@@ -16,6 +16,7 @@ export const state = {
   details: new Map(), // replyId -> reply detail (+ .layers)
   layerData: new Map(), // `${replyId}:${layer}:${rows}` -> layer payload
   scans: new Map(), // `${replyId}:${kind}:${layer}` -> results (for the current edits)
+  lens: new Map(), // replyId -> { rows, probs } logit-lens grid (fixed per reply)
   damage: null, // { replyId, mean_kl, ... } for the latest reply under current edits
   hoverRow: null,
   presets: [],
@@ -330,6 +331,29 @@ export function scan(replyId, kind, layer = null) {
     .finally(() => pendingScans.delete(key));
   pendingScans.set(key, p);
   return p;
+}
+
+const pendingLens = new Map();
+export function lens(replyId) {
+  if (state.lens.has(replyId)) return Promise.resolve(state.lens.get(replyId));
+  if (!pendingLens.has(replyId)) {
+    pendingLens.set(
+      replyId,
+      api
+        .lens(replyId)
+        .then((g) => {
+          state.lens.set(replyId, g);
+          emit();
+          return g;
+        })
+        .catch((e) => {
+          toast(e.message, true);
+          throw e;
+        })
+        .finally(() => pendingLens.delete(replyId)),
+    );
+  }
+  return pendingLens.get(replyId);
 }
 
 export function scanResult(replyId, kind, layer = null) {

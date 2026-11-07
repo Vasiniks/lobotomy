@@ -183,3 +183,9 @@ export function splitLead(text) {
   const m = /^(\s+)(\S[\s\S]*)$/.exec(text);
   return m ? [m[1], m[2]] : ["", text];
 }
+
+// Probabilities: two decimals, "<0.01" below that (never scientific notation).
+export function fmtProb(p) {
+  if (!Number.isFinite(p)) return "–";
+  return p < 0.01 ? "<0.01" : p.toFixed(2);
+}

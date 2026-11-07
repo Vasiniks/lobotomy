@@ -641,6 +641,40 @@ class Engine:
             "layer_effect": layer_total,
         }
 
+    def lens_grid(self, reply: Reply) -> dict:
+        """When did each layer know the next word? For every reply token, the
+        probability each layer's residual stream (read through the final norm and
+        unembedding) gave that token, at the position that predicted it.
+
+        Returns {"rows": [...], "probs": (K, L) list}, where rows are the recording
+        rows of the reply tokens (the cells line up with the layer strips).
+        """
+        rec = reply.recording
+        if rec is None or rec.resid_vec is None:
+            raise ValueError("no recording")
+        if "lens_grid" in reply.cache:
+            return reply.cache["lens_grid"]
+        pos_to_row = {int(p): i for i, p in enumerate(rec.positions.tolist())}
+        rows, src, targets = [], [], []
+        for k, tid in enumerate(reply.token_ids):
+            pos = reply.prompt_len + k
+            prev = pos_to_row.get(pos - 1)
+            if prev is None or pos not in pos_to_row:
+                continue
+            rows.append(pos_to_row[pos])
+            src.append(prev)
+            targets.append(tid)
+        L = self.config.n_layers
+        if not rows:
+            out = {"rows": [], "probs": []}
+        else:
+            vecs = rec.resid_vec[src].reshape(len(src) * L, -1)  # (K*L, hidden)
+            with self._lock:
+                p = self.backend.lens_probs(vecs, np.repeat(targets, L))
+            out = {"rows": rows, "probs": p.reshape(len(src), L)}
+        reply.cache["lens_grid"] = out
+        return out
+
     def logit_lens(self, reply: Reply, row: int, k: int = 5) -> list[list[tuple[str, float]]]:
         """For one recorded position: the top-k next tokens implied after each layer."""
         vecs = reply.recording.resid_vec[row]  # (L, hidden)

@@ -485,6 +485,16 @@ def create_app(engine: Engine) -> FastAPI:
             "attention": attention,
         }
 
+    @app.get("/api/replies/{reply_id}/lens")
+    async def lens(reply_id: int):
+        """Logit-lens grid: per reply token, the probability each layer already gave it."""
+        r = api.full(reply_id)
+        try:
+            g = await api.run(eng.lens_grid, r)
+        except NotImplementedError:
+            raise HTTPException(501, "this backend can't compute the logit lens")
+        return {"rows": g["rows"], "probs": [_rl(row, 4) for row in g["probs"]]}
+
     @app.get("/api/replies/{reply_id}/damage")
     async def damage(reply_id: int):
         r = api.find(reply_id)
