@@ -34,7 +34,7 @@ def test_state(client):
     assert s["edits"] == [] and s["exchanges"] == []
 
 
-def test_chat_edit_again_inspect(client):
+def test_chat_edit_again_inspect(client, fresh):
     ev = stream(client, "/api/chat", {"text": "What is the capital of France? One sentence."})
     assert ev[0]["type"] == "start" and ev[-1]["type"] == "done"
     text = "".join(e["text"] for e in ev if e["type"] == "token")
@@ -59,7 +59,7 @@ def test_chat_edit_again_inspect(client):
     assert len(layers) == 24 and len(layers[0]["heads"]) == 16
 
     lay = client.get(f"/api/replies/{reply['id']}/layer/11").json()
-    assert len(lay["grid"]) == 3584 and lay["n_heads"] == 8 and len(lay["top"]) == 40
+    assert len(lay["grid"]) == fresh.config.intermediate_size and lay["n_heads"] == 8 and len(lay["top"]) == 40
 
     n = lay["top"][0]["neuron"]
     nr = client.get(f"/api/replies/{reply['id']}/neuron/11/{n}").json()

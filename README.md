@@ -25,6 +25,17 @@ scripts/download_model.sh            # ~533 MB into models/
 The first start dequantizes the GGUF and caches the result in `models/.cache/`
 (about 20 s); later starts take about 2 s.
 
+**Bigger model.** Qwen3.5 2B works too (about 33 tokens/s, 5.5 GB of RAM):
+
+```bash
+scripts/download_model.sh Qwen3.5-2B-Q4_K_M.gguf     # ~1.3 GB
+.venv/bin/lobotomy serve --model models/Qwen3.5-2B-Q4_K_M.gguf
+```
+
+Qwen3.5 4B and larger use more DeltaNet value heads than key heads. llama.cpp
+reorders those heads when it converts the model, and lobotomy doesn't undo that
+yet, so it refuses to load them.
+
 ## The web UI
 
 - **Chat.** Replies stream in; every word is clickable. Next to the chat, the

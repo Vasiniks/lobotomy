@@ -80,7 +80,7 @@ def test_damage_is_zero_when_healthy_and_positive_when_broken(fresh):
     r = fresh.chat(Q)
     d0 = fresh.damage(r)
     assert d0["mean_kl"] < 1e-3
-    fresh.add_edit(Target("layer", layer=1), value=0.0)
+    fresh.add_edit(Target("layer", layer=0), value=0.0)  # critical in every Qwen3.5 size
     d1 = fresh.damage(r)
     assert d1["mean_kl"] > 0.05
     assert len(d1["kl"]) == len(r.token_ids)
