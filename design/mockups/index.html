@@ -13,13 +13,16 @@
 <style>
   body { min-height: 100vh; }
   .board { max-width: 1240px; padding: var(--space-7) var(--space-6) var(--space-8); display: grid; gap: var(--space-8); }
-  .board section { display: grid; gap: var(--space-5); }
+  /* rhythm: a heading sits close to what it names (16), cards are set further
+     apart than their own padding (32 vs 24), sections are furthest apart (64) */
+  .board section { display: grid; gap: var(--space-4); }
+  .board section > .checks { margin-top: var(--space-2); }
   .board h2 { font-size: var(--text-xl); font-weight: var(--weight-bold); letter-spacing: var(--tracking-display); }
   .board h3 { font-size: var(--text-md); font-weight: var(--weight-bold); }
   .lede { max-width: 64ch; color: var(--ink-2); font-size: var(--text-lg); line-height: var(--leading-read); }
   .thesis { font-size: var(--text-4xl); line-height: var(--leading-tight); letter-spacing: var(--tracking-display); font-weight: var(--weight-bold); max-width: 20ch; }
-  .hero { display: grid; gap: var(--space-5); }
-  .hero-scales { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-7); }
+  .hero { display: grid; gap: var(--space-3); }
+  .hero-scales { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-7); margin-top: var(--space-5); }
   .big-bar { display: flex; gap: 2px; padding: 2px; background: var(--surface-well); border-radius: 3px; width: max-content; }
   .big-bar i { width: 40px; height: 28px; border-radius: 2px; background: var(--act, var(--edit)); }
   .big-bar i.none { background: var(--edit-none); }
@@ -31,7 +34,7 @@
   .labels span { width: 40px; text-align: center; }
 
   /* logo directions */
-  .directions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
+  .directions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-7) var(--space-6); }
   .direction { display: grid; gap: var(--space-3); align-content: start; }
   .direction header { display: grid; gap: var(--space-1); min-height: 7.5em; }
   .direction header p { color: var(--ink-2); font-size: var(--text-sm); max-width: 44ch; }
@@ -48,7 +51,7 @@
   .recommended { box-shadow: inset 0 0 0 1px var(--ink-1); }
 
   /* colour */
-  .scales { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+  .scales { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); }
   .scale-card { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-5); border-radius: var(--radius-panel); background: var(--surface-ground); color: var(--ink-1); box-shadow: inset 0 0 0 1px var(--rule); }
   .topbar .crumbs { gap: var(--space-4); }
   .scale-card p { font-size: var(--text-sm); color: var(--ink-2); max-width: 56ch; }
@@ -88,7 +91,7 @@
   .zoom-well { padding: var(--space-3); background: var(--surface-well); border-radius: 3px; display: flex; gap: var(--space-5); }
 
   /* screens */
-  .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+  .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-7) var(--space-6); }
   .screen { display: grid; gap: var(--space-2); text-decoration: none; }
   .screen img { width: 100%; height: auto; display: block; border-radius: var(--radius-panel); box-shadow: 0 0 0 1px var(--rule); }
   .screen:hover img { box-shadow: 0 0 0 1px var(--ink-1); }
