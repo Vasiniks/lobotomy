@@ -245,7 +245,9 @@ def create_app(engine: Engine) -> FastAPI:
             out = []
             for d in body.get("edits", []):
                 t = dict(d["target"])
-                out.append(eng.add_edit(Target(**t), op=d.get("op", "scale"), value=float(d.get("value", 0.0))))
+                out.append(
+                    eng.add_edit(Target(**t), op=d.get("op", "scale"), value=float(d.get("value", 0.0)), note=d.get("note", ""))
+                )
             return out
         try:
             added = await api.run(work)
@@ -472,6 +474,16 @@ def create_app(engine: Engine) -> FastAPI:
     # --- UI ---------------------------------------------------------------------------
 
     if WEB_DIR.exists():
+
+        @app.middleware("http")
+        async def revalidate_assets(request, call_next):
+            # Local app: always revalidate (cheap ETag check), so edits to the UI
+            # never leave a stale module in the browser cache.
+            response = await call_next(request)
+            if request.url.path.startswith("/assets") or request.url.path == "/":
+                response.headers["Cache-Control"] = "no-cache"
+            return response
+
         app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 
         @app.get("/")

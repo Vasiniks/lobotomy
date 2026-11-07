@@ -1,0 +1,237 @@
+/* lobotomy design tokens
+   ------------------------------------------------------------------
+   Dark-first. The app opens dark because activity is drawn as light;
+   light is a complete second theme, chosen with data-theme="light".
+
+   The one rule: light shows what the model did, colour shows what you did.
+   Activity is a near-neutral lightness ramp. The only hues in the product
+   are the two edit poles: cold (turned down / off) and hot (boosted).
+
+   Every value below was checked:
+   - text tokens: WCAG 2 >= 5:1 on ground, panel and raised (both themes)
+   - activity ramp: lightness strictly monotone, also under protanopia,
+     deuteranopia and tritanopia (Machado 2009, severity 1); adjacent steps
+     >= 6.8 dE (OKLab x100)
+   - edit scale: every step >= 3:1 against every surface; cold vs hot at the
+     same step >= 18 dE under every CVD simulation
+   Hex values are the gamut-mapped output of the OKLCH values in comments.
+   Fonts are SIL OFL 1.1 and can be bundled with the offline app.
+   ------------------------------------------------------------------ */
+
+:root {
+  /* ---------- type ---------- */
+  --font-sans: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-2xs: 0.6875rem;  /* 11px  axis ticks only */
+  --text-xs:  0.75rem;    /* 12px  captions, table meta */
+  --text-sm:  0.8125rem;  /* 13px  dense UI: strips, lists */
+  --text-md:  0.9375rem;  /* 15px  UI base */
+  --text-lg:  1.0625rem;  /* 17px  model replies, chat */
+  --text-xl:  1.3125rem;  /* 21px  pane titles */
+  --text-2xl: 1.625rem;   /* 26px  view titles */
+  --text-3xl: 2.125rem;   /* 34px  gallery headings */
+  --text-4xl: 2.75rem;    /* 44px  gallery only */
+
+  --leading-tight: 1.15;
+  --leading-ui: 1.4;
+  --leading-read: 1.62;
+
+  --weight-regular: 400;
+  --weight-medium: 560;
+  --weight-bold: 720;
+
+  --tracking-display: -0.012em;
+  --tracking-ui: 0;
+
+  /* ---------- space (4px base) ---------- */
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ---------- shape ---------- */
+  --radius-cell: 1px;      /* neuron cells, strip segments */
+  --radius-control: 3px;   /* buttons, inputs, swatches */
+  --radius-panel: 6px;     /* popovers, dialogs */
+  --radius-icon: 20%;      /* app icon / favicon tile */
+
+  --rule-width: 1px;
+  --edit-ring: 2px;        /* coloured ring on an edited cell */
+  --edit-gap: 1px;         /* surface gap between cell and ring */
+  --focus-width: 2px;
+
+  /* ---------- data geometry ---------- */
+  --cell: 8px;             /* neuron cell in the 64 x 56 grid */
+  --cell-gap: 1px;
+  --strip-h: 20px;         /* one layer in the stack */
+  --strip-block-gap: 6px;  /* between the six 4-layer blocks */
+
+  /* ---------- motion ---------- */
+  --dur-instant: 80ms;     /* hover, press */
+  --dur-quick: 140ms;      /* popover in, toggles */
+  --dur-base: 220ms;       /* activity re-light, panel changes */
+  --dur-cut: 320ms;        /* the cut mark drawing across an "off" cell */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-standard: cubic-bezier(0.3, 0, 0.1, 1);
+
+  --z-sticky: 10;
+  --z-popover: 20;
+  --z-toast: 30;
+
+  /* ---------- logo (fixed, never themed) ---------- */
+  --logo-on-dark: #eee9db;
+  --logo-on-light: #161f1b;
+  --logo-tile: #1a2420;
+}
+
+/* ---------- colour: dark (default) ----------
+   Also usable on any element: <div data-theme="dark"> forces dark inside. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-well:   #0e1714;  /* oklch(0.195 0.015 168) data wells: grid, strips */
+  --surface-ground: #141e1a;  /* oklch(0.225 0.017 168) app canvas */
+  --surface-panel:  #1a2420;  /* oklch(0.250 0.017 168) side panes, bars */
+  --surface-raised: #232e2a;  /* oklch(0.290 0.017 168) popovers, hovered rows */
+
+  --rule:        #313c38;     /* oklch(0.345 0.016 168) hairlines */
+  --rule-strong: #4d5853;     /* oklch(0.450 0.016 168) control borders */
+
+  --ink-1: #eee9db;           /* oklch(0.935 0.020 92)  bone: primary text */
+  --ink-2: #bbc0b5;           /* oklch(0.800 0.016 125) secondary text */
+  --ink-3: #949e97;           /* oklch(0.690 0.016 155) meta, labels */
+  --ink-inverse: #141e1a;     /* text on a bone fill */
+
+  --focus: var(--ink-1);
+  --select: var(--ink-1);
+
+  /* Activity: how hard a neuron, head or layer fired (|activation|).
+     Sequential, 9 steps. 0 = silent. Bins are set by the engine per view. */
+  --act-0: #1e2824;  /* oklch(0.265 0.016 168) */
+  --act-1: #2f3935;  /* oklch(0.335 0.015 168) */
+  --act-2: #444d49;  /* oklch(0.410 0.014 166) */
+  --act-3: #5a635e;  /* oklch(0.490 0.013 164) */
+  --act-4: #727a75;  /* oklch(0.570 0.012 160) */
+  --act-5: #8b9189;  /* oklch(0.650 0.014 140) */
+  --act-6: #aaab9c;  /* oklch(0.735 0.020 110) */
+  --act-7: #cfc9b1;  /* oklch(0.835 0.034 96)  */
+  --act-8: #f9efc9;  /* oklch(0.950 0.050 95)  filament */
+
+  /* Ink for numbers drawn on an activity fill. Step 4 passes 3:1 only:
+     use it for large numerals, never body text. */
+  --act-ink-0: var(--ink-1); --act-ink-1: var(--ink-1); --act-ink-2: var(--ink-1);
+  --act-ink-3: var(--ink-1); --act-ink-4: #0e1714;     --act-ink-5: #0e1714;
+  --act-ink-6: #0e1714;      --act-ink-7: #0e1714;     --act-ink-8: #0e1714;
+
+  /* Edits: diverging around "untouched" (x1).
+     down-1 x0.5..<1   down-2 x0.25..<0.5   down-3 >0..<0.25   down-4 off (x0)
+     up-1   >1..x2     up-2   >x2..x4       up-3   >x4..x8     up-4   >x8      */
+  --edit-none:   #5d6662;  /* oklch(0.500 0.012 168) midpoint, legends only */
+  --edit-down-1: #588ac1;  /* oklch(0.620 0.100 252) */
+  --edit-down-2: #5ea0e3;  /* oklch(0.690 0.120 250) */
+  --edit-down-3: #70b8f6;  /* oklch(0.760 0.115 246) */
+  --edit-down-4: #8fcfff;  /* oklch(0.830 0.095 242) */
+  --edit-up-1:   #c16d3a;  /* oklch(0.620 0.125 50)  */
+  --edit-up-2:   #e17d3f;  /* oklch(0.690 0.145 50)  */
+  --edit-up-3:   #f5974b;  /* oklch(0.760 0.145 57)  */
+  --edit-up-4:   #ffb764;  /* oklch(0.830 0.130 68)  */
+  --edit-off: var(--edit-down-4);
+  --edit-down: var(--edit-down-2);   /* the pole colour, for icons and legends */
+  --edit-up: var(--edit-up-2);
+  --edit-down-wash: color-mix(in oklab, var(--edit-down-2) 14%, var(--surface-panel));
+  --edit-up-wash:   color-mix(in oklab, var(--edit-up-2) 14%, var(--surface-panel));
+
+  /* System status never borrows a data colour. Errors are bone text,
+     a strong rule and the word "Error"; there is no red in the product. */
+  --status-rule: var(--ink-1);
+
+  --shadow-popover: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 0 0 1px var(--rule-strong);
+  --shadow-drag: 0 6px 16px -6px rgb(0 0 0 / 0.5);
+}
+
+/* ---------- colour: light ("ward") ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-well:   #e0e9e3;  /* oklch(0.925 0.012 155) */
+  --surface-ground: #e9f1eb;  /* oklch(0.950 0.011 155) */
+  --surface-panel:  #f5faf7;  /* oklch(0.980 0.006 155) */
+  --surface-raised: #fcfefc;  /* oklch(0.995 0.003 155) */
+
+  --rule:        #ccd5d0;
+  --rule-strong: #a7b1ab;
+
+  --ink-1: #161f1b;
+  --ink-2: #3e4843;
+  --ink-3: #5c6661;
+  --ink-inverse: #f5faf7;
+
+  /* Activity becomes ink density on paper. */
+  --act-0: #d3dcd6;
+  --act-1: #bcc5c0;
+  --act-2: #a4ada8;
+  --act-3: #8b9590;
+  --act-4: #737d78;
+  --act-5: #5e665f;
+  --act-6: #4c4d43;
+  --act-7: #39332a;
+  --act-8: #241c15;
+
+  --act-ink-0: var(--ink-1); --act-ink-1: var(--ink-1); --act-ink-2: var(--ink-1);
+  --act-ink-3: var(--ink-1); --act-ink-4: #f5faf7;     --act-ink-5: #f5faf7;
+  --act-ink-6: #f5faf7;      --act-ink-7: #f5faf7;     --act-ink-8: #f5faf7;
+
+  /* On paper the scale darkens with strength instead of brightening. */
+  --edit-none:   #b2b9b5;
+  --edit-down-1: #4c83c0;
+  --edit-down-2: #2b6db7;
+  --edit-down-3: #1656a4;
+  --edit-down-4: #114286;
+  --edit-up-1:   #c66d23;
+  --edit-up-2:   #b85207;
+  --edit-up-3:   #a23d08;
+  --edit-up-4:   #842e11;
+  --edit-down-wash: color-mix(in oklab, var(--edit-down-2) 10%, var(--surface-panel));
+  --edit-up-wash:   color-mix(in oklab, var(--edit-up-2) 10%, var(--surface-panel));
+
+  --shadow-popover: 0 16px 40px -14px rgb(22 31 27 / 0.32), 0 0 0 1px var(--rule-strong);
+  --shadow-drag: 0 6px 16px -8px rgb(22 31 27 / 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-quick: 0ms;
+    --dur-base: 0ms;
+    --dur-cut: 0ms;
+  }
+}
+
+/* Utility classes so markup can say what a colour means, not what it is. */
+.act-0 { --act: var(--act-0); --act-ink: var(--act-ink-0); }
+.act-1 { --act: var(--act-1); --act-ink: var(--act-ink-1); }
+.act-2 { --act: var(--act-2); --act-ink: var(--act-ink-2); }
+.act-3 { --act: var(--act-3); --act-ink: var(--act-ink-3); }
+.act-4 { --act: var(--act-4); --act-ink: var(--act-ink-4); }
+.act-5 { --act: var(--act-5); --act-ink: var(--act-ink-5); }
+.act-6 { --act: var(--act-6); --act-ink: var(--act-ink-6); }
+.act-7 { --act: var(--act-7); --act-ink: var(--act-ink-7); }
+.act-8 { --act: var(--act-8); --act-ink: var(--act-ink-8); }
+
+.edit-down-1 { --edit: var(--edit-down-1); }
+.edit-down-2 { --edit: var(--edit-down-2); }
+.edit-down-3 { --edit: var(--edit-down-3); }
+.edit-off,
+.edit-down-4 { --edit: var(--edit-down-4); }
+.edit-up-1 { --edit: var(--edit-up-1); }
+.edit-up-2 { --edit: var(--edit-up-2); }
+.edit-up-3 { --edit: var(--edit-up-3); }
+.edit-up-4 { --edit: var(--edit-up-4); }

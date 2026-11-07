@@ -1,0 +1,125 @@
+/* lobotomy app additions on top of app.css (the design's components).
+   Same rules: only tokens, no new hues. */
+
+/* noise edits have no pole: neutral edit colour, dashed ring */
+.edit-noise { --edit: var(--edit-none); }
+.swatch.edit-noise {
+  background: repeating-linear-gradient(135deg, var(--edit-none) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--edit-none);
+}
+.ngrid i.edit-noise, .head.edit-noise {
+  box-shadow: 0 0 0 var(--edit-gap) var(--surface-well), 0 0 0 calc(var(--edit-gap) + var(--edit-ring)) var(--ink-3);
+  outline: 1px dashed var(--surface-well); outline-offset: 1px;
+}
+.edit-none { --edit: var(--edit-none); }
+
+/* ---------------------------------------------------------------- shell */
+.topbar .brand img { height: 19px; }
+.topbar .btn-quiet { height: 30px; }
+.health.is-healthy { color: var(--ink-3); }
+.damage { display: flex; align-items: baseline; gap: var(--space-1); font-size: var(--text-sm); color: var(--ink-2); }
+.damage b { font-family: var(--font-mono); font-weight: var(--weight-regular); color: var(--ink-1); }
+.damage .meter { display: inline-block; width: 48px; height: 4px; background: var(--surface-well); border-radius: 1px; position: relative; top: -2px; }
+.damage .meter i { position: absolute; inset: 0 auto 0 0; background: var(--ink-2); border-radius: 1px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); display: inline-block; }
+.is-busy .status-dot { background: var(--ink-1); animation: pulse 1s var(--ease-standard) infinite alternate; }
+@keyframes pulse { from { opacity: 0.35; } }
+
+.body > .loading { display: grid; place-items: center; color: var(--ink-3); grid-column: 1 / -1; }
+
+/* ---------------------------------------------------------------- chat */
+.transcript:empty::before {
+  content: "Ask the model something, then open it up and break it.";
+  color: var(--ink-3); font-size: var(--text-md);
+}
+.msg-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-model.is-streaming .msg-body::after {
+  content: ""; display: inline-block; width: 7px; height: 1.1em; margin-left: 2px; vertical-align: -3px;
+  background: var(--ink-2); animation: pulse 0.6s steps(2) infinite alternate;
+}
+.msg-meta .swatches { display: inline-flex; gap: 3px; align-items: center; }
+.msg-meta .swatches .swatch:last-of-type { margin-right: var(--space-1); }
+.msg-meta a { color: var(--ink-2); }
+.msg-meta a:hover { color: var(--ink-1); }
+.tok.is-col { background: var(--surface-raised); box-shadow: inset 0 -1px 0 var(--ink-2); }
+.tok.is-special { color: var(--ink-3); font-family: var(--font-mono); font-size: var(--text-sm); }
+.composer textarea { min-height: 40px; max-height: 200px; height: auto; overflow-y: auto; }
+.composer textarea:disabled { opacity: 0.6; }
+.pending .actions { display: flex; gap: var(--space-2); }
+
+/* ---------------------------------------------------------------- strips */
+.strip .heat i { transition: background var(--dur-base) var(--ease-out); }
+.strip-cost { display: grid; grid-template-columns: 1fr; gap: 2px; text-align: right; font-size: var(--text-xs); color: var(--ink-1); font-family: var(--font-mono); }
+.strip-cost .bar { height: 3px; background: var(--surface-well); border-radius: 1px; position: relative; }
+.strip-cost .bar b { position: absolute; inset: 0 0 0 auto; background: var(--ink-2); border-radius: 1px; }
+.stack-wrap.has-cost { --strip-cols: 22px 66px minmax(0, 1fr) 46px 48px 64px; }
+.stack-tools { display: flex; gap: var(--space-2); align-items: center; margin-left: auto; }
+.stack-empty { padding: var(--space-6) var(--space-5); color: var(--ink-3); font-size: var(--text-sm); max-width: 52ch; }
+.heat.is-empty { background: var(--surface-well); }
+
+/* ---------------------------------------------------------------- layer view */
+.ngrid i { cursor: pointer; }
+.ngrid i:hover { outline: 1px solid var(--ink-2); outline-offset: 1px; z-index: 2; }
+.head-cell:hover .head { box-shadow: 0 0 0 1px var(--ink-2); }
+.head-cell.is-selected .head { outline: 1px solid var(--select); outline-offset: 3px; }
+.list tr { cursor: pointer; }
+.list td.cost { font-family: var(--font-mono); font-size: var(--text-xs); text-align: right; }
+.layer-tools .btn { height: 30px; }
+.scan-note { font-size: var(--text-xs); color: var(--ink-3); max-width: 60ch; }
+
+/* ---------------------------------------------------------------- popover */
+.popover { position: fixed; max-width: calc(100vw - 24px); }
+.popover .says { display: grid; gap: 4px; font-size: var(--text-xs); color: var(--ink-3); }
+.popover .says .toks { display: flex; flex-wrap: wrap; gap: 4px; }
+.popover .says code {
+  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-1);
+  background: var(--surface-well); border-radius: 2px; padding: 0 4px;
+}
+.popover .trace { width: 100%; height: 34px; display: block; }
+.popover .trace path { fill: none; stroke: var(--ink-2); stroke-width: 1.2; }
+.popover .trace line { stroke: var(--rule-strong); stroke-width: 1; }
+.popover .close { position: absolute; top: var(--space-2); right: var(--space-2); }
+.popover .seg { width: max-content; }
+.popover-actions .btn[aria-pressed="true"] { border-color: var(--edit-down-4); }
+
+/* ---------------------------------------------------------------- token view */
+.lens { display: grid; gap: 2px; font-size: var(--text-xs); }
+.lens-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 40px; gap: var(--space-2); align-items: center; color: var(--ink-3); }
+.lens-row .mono { color: var(--ink-1); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lens-row .alt { color: var(--ink-3); }
+.lens-row.is-final .mono { font-weight: var(--weight-bold); }
+.alts { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-xs); color: var(--ink-3); }
+.alts code { font-family: var(--font-mono); color: var(--ink-1); background: var(--surface-well); padding: 0 4px; border-radius: 2px; }
+
+/* ---------------------------------------------------------------- compare */
+.answer-pick { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; font-size: var(--text-xs); color: var(--ink-3); }
+.answer .msg-body .tok { cursor: default; }
+.answer .msg-body .tok.is-diff { box-shadow: inset 0 -1px 0 var(--ink-3); }
+
+/* ---------------------------------------------------------------- menus, toast */
+.menu {
+  position: fixed; z-index: var(--z-popover); width: 300px; padding: var(--space-4);
+  background: var(--surface-raised); border-radius: var(--radius-panel); box-shadow: var(--shadow-popover);
+  display: grid; gap: var(--space-3); animation: pop-in var(--dur-quick) var(--ease-out);
+}
+.menu h3 { font-size: var(--text-md); font-weight: var(--weight-bold); }
+.field { display: grid; grid-template-columns: 1fr 96px; gap: var(--space-2); align-items: center; font-size: var(--text-sm); color: var(--ink-2); }
+.field input[type="number"], .field select, .menu textarea {
+  font: inherit; font-size: var(--text-sm); color: var(--ink-1); background: var(--surface-well);
+  border: var(--rule-width) solid var(--rule-strong); border-radius: var(--radius-control); padding: 4px 6px; width: 100%;
+}
+.menu textarea { min-height: 64px; resize: vertical; }
+.field.check { grid-template-columns: auto 1fr; }
+.field.check input { accent-color: var(--ink-1); margin: 0; }
+
+.toast {
+  position: fixed; left: 50%; bottom: var(--space-5); transform: translateX(-50%); z-index: var(--z-toast);
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-control);
+  background: var(--surface-raised); color: var(--ink-1); font-size: var(--text-sm);
+  box-shadow: var(--shadow-popover); opacity: 0; pointer-events: none; transition: opacity var(--dur-quick) var(--ease-out);
+  max-width: min(560px, calc(100vw - 32px));
+}
+.toast.is-on { opacity: 1; }
+.toast.is-error { border-left: 3px solid var(--status-rule); }
+
+.visually-hidden-file { display: none; }
