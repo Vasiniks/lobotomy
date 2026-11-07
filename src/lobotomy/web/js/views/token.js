@@ -6,7 +6,7 @@ import { state } from "../store.js";
 import { layerTypeName, renderRail, swatch } from "../components.js";
 import { renderChat } from "./chat.js";
 import { setLayerRow } from "./layer.js";
-import { actBin, clear, editValueText, fmt, h, showToken } from "../util.js";
+import { actBin, clear, editValueText, fmt, h, showLoading, showToken } from "../util.js";
 
 const cache = new Map();
 const whyCache = new Map(); // `${reply}:${row}:${edit signature}` -> Promise
@@ -158,6 +158,7 @@ function eraseButton(d) {
 export async function renderTokenView(body, replyId, row) {
   body.className = "body";
   const key = `${replyId}:${row}`;
+  showLoading(body, `token:${key}`);
   if (!cache.has(key)) cache.set(key, api.token(replyId, row));
   let data, detail;
   try {
@@ -172,6 +173,7 @@ export async function renderTokenView(body, replyId, row) {
 
   const prevScroll = body.querySelector(".inspect")?.scrollTop ?? 0;
   clear(body);
+  body.dataset.view = `token:${key}`;
   const chat = h("section", { class: "chat", "aria-label": "Chat" });
   const inspect = h("section", { class: "inspect", "aria-labelledby": "tok-title" });
   const rail = h("aside", { class: "rail", "aria-label": "Edits" });

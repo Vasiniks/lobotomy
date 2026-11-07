@@ -230,13 +230,17 @@ export function renderStrips(root, detail, opts = {}) {
   const act = detail?.activity?.neuron_mean;
   const peaks = detail?.layers;
   const hasCost = Array.isArray(cost) && cost.length === nL;
+  const nCells = compact ? MAX_CELLS.compact : MAX_CELLS.full;
   const maxCost = hasCost ? Math.max(...cost.map((c) => c.mean_kl), 1e-6) : 1;
 
   for (let b = 0; b < nL / 4; b++) {
     const block = h("div", { class: "block" });
     for (let L = b * 4; L < b * 4 + 4 && L < nL; L++) {
       const attn = state.model.layers[L].type === "attention";
-      const vals = act ? rows.map((r) => act[r][L]) : [];
+      // Long replies: one cell per group of tokens (their strongest value), so
+      // cells never shrink below a visible width.
+      const raw = act ? rows.map((r) => act[r][L]) : [];
+      const vals = bucketMax(raw, nCells);
       const heat = h(
         "span",
         { class: `heat${vals.length ? "" : " is-empty"}` },
@@ -277,12 +281,36 @@ export function renderStrips(root, detail, opts = {}) {
     }
     root.append(block);
   }
+  root._rows = rows;
+  root._nCells = nCells;
   if (col !== null && rows.length) {
-    const i = rows.indexOf(col);
-    if (i >= 0) {
-      requestAnimationFrame(() => placeCursor(root, i, rows.length));
-    }
+    requestAnimationFrame(() => placeRowCursor(root, col));
   }
+}
+
+const MAX_CELLS = { full: 96, compact: 48 };
+
+function bucketMax(values, n) {
+  if (values.length <= n) return values;
+  const out = [];
+  for (let b = 0; b < n; b++) {
+    const lo = Math.floor((b * values.length) / n);
+    const hi = Math.max(lo + 1, Math.floor(((b + 1) * values.length) / n));
+    let m = -Infinity;
+    for (let i = lo; i < hi; i++) if (values[i] > m) m = values[i];
+    out.push(m);
+  }
+  return out;
+}
+
+// Put the column cursor on the cell that holds recording row `row`.
+export function placeRowCursor(root, row) {
+  root.querySelector(".col-cursor")?.remove();
+  const rows = root._rows || [];
+  const i = rows.indexOf(row);
+  if (row === null || i < 0) return;
+  const cells = Math.min(rows.length, root._nCells || rows.length);
+  placeCursor(root, Math.floor((i * cells) / rows.length), cells);
 }
 
 function placeCursor(root, i, n) {

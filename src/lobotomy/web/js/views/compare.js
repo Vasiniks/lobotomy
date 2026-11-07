@@ -109,6 +109,7 @@ export async function renderCompareView(body, exchangeId) {
   );
   const rail = h("aside", { class: "rail", "aria-label": "Edits" });
   body.append(section, rail);
+  body.dataset.view = `compare:${exchangeId}`;
   renderRail(rail);
 }
 

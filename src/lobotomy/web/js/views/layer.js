@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import * as S from "../store.js";
 import { state } from "../store.js";
 import { closePopover, isOpen, openEditPopover, renderRail, renderStrips, sparkline, swatch } from "../components.js";
-import { actBin, clear, editClass, editValueText, fmt, fmtCost, h, percentile, showToken } from "../util.js";
+import { actBin, clear, editClass, editValueText, fmt, fmtCost, h, percentile, showLoading, showToken } from "../util.js";
 
 const COLS = 64;
 // A word picked in the word view: { replyId, row }. Only used while it belongs
@@ -26,6 +26,7 @@ export async function renderLayerView(body, layer) {
     );
     return;
   }
+  showLoading(body, `layer:${layer}`);
   const detail = await S.ensureDetail(last.id);
   const row =
     selected && selected.replyId === last.id && selected.row >= 0 && selected.row < detail.tokens.length ? selected.row : null;
@@ -49,6 +50,7 @@ export async function renderLayerView(body, layer) {
 
   const scroll = body.querySelector(".layer")?.scrollTop ?? 0;
   clear(body);
+  body.dataset.view = `layer:${layer}`;
   const minimap = h("nav", { class: "minimap", "aria-label": "Layers" }, h("div", { class: "pane-head" }, h("h2", {}, "Layers")));
   const strips = h("div", { class: "strips" });
   minimap.append(h("div", { class: "stack-wrap" }, strips));

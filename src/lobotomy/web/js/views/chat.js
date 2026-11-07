@@ -2,7 +2,7 @@
 
 import * as S from "../store.js";
 import { state } from "../store.js";
-import { renderRail, renderStrips, swatch } from "../components.js";
+import { placeRowCursor, renderRail, renderStrips, swatch } from "../components.js";
 import { clear, fmt, h } from "../util.js";
 
 let showCost = false;
@@ -187,19 +187,7 @@ function modelMsg(ex, r, selected) {
 function hoverRow(row) {
   state.hoverRow = row;
   const strips = document.getElementById("stack-main");
-  if (!strips) return;
-  const detail = strips._detail;
-  if (!detail) return;
-  const rows = detail.tokens.filter((t) => t.role === "reply").map((t) => t.row);
-  strips.querySelector(".col-cursor")?.remove();
-  if (row === null) return;
-  const i = rows.indexOf(row);
-  const heat = strips.querySelector(".heat");
-  if (i < 0 || !heat) return;
-  const hr = heat.getBoundingClientRect();
-  const rr = strips.getBoundingClientRect();
-  const w = (hr.width - 2) / rows.length;
-  strips.append(h("span", { class: "col-cursor", style: { left: `${hr.left - rr.left + 1 + i * w - 1}px`, width: `${Math.max(3, w + 2)}px` } }));
+  if (strips) placeRowCursor(strips, row);
 }
 
 export function renderStack(section) {
@@ -324,6 +312,7 @@ export function legend() {
 export function renderChatView(body) {
   clear(body);
   body.className = "body";
+  body.dataset.view = "chat";
   const chat = h("section", { class: "chat", "aria-label": "Chat" });
   const stack = h("section", { "aria-label": "Layers" });
   const rail = h("aside", { class: "rail", "aria-label": "Edits" });

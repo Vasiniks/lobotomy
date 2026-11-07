@@ -147,3 +147,12 @@ export function debounce(fn, ms) {
     t = setTimeout(() => fn(...a), ms);
   };
 }
+
+// When a view starts loading something new, replace the old view at once
+// (instead of leaving it on screen under the new URL).
+export function showLoading(body, viewKey) {
+  if (body.dataset.view === viewKey) return;
+  body.dataset.view = `${viewKey}:loading`;
+  clear(body);
+  body.append(h("div", { class: "loading" }, h("p", {}, "Loading…")));
+}

@@ -57,6 +57,8 @@ class Reply:
     stats: dict
     kept_memory: bool = False  # continued from memory built under earlier weights
     created: float = field(default_factory=time.time)
+    # derived data (token texts, layer ranges); a reply never changes once made
+    cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def prompt_len(self) -> int:
@@ -64,6 +66,8 @@ class Reply:
 
     def recorded_tokens(self, tokenizer: ChatTokenizer) -> list[dict]:
         """Every recorded position with its token text and role (prompt or reply)."""
+        if "tokens" in self.cache:
+            return [dict(t) for t in self.cache["tokens"]]
         all_ids = self.prompt_ids + self.token_ids
         out = []
         if self.recording is None:
@@ -84,7 +88,16 @@ class Reply:
                     "role": "reply" if pos >= self.prompt_len else "prompt",
                 }
             )
-        return out
+        self.cache["tokens"] = out
+        return [dict(t) for t in out]
+
+    def layer_refs(self):
+        """Each layer's usual activation range over this reply's recording (cached)."""
+        if "refs" not in self.cache:
+            from .analysis import layer_references
+
+            self.cache["refs"] = layer_references(self.recording)
+        return self.cache["refs"]
 
 
 @dataclass

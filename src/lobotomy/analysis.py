@@ -92,12 +92,24 @@ def layer_reference(rec: Recording, layer: int, q: float = 99.9) -> float:
     return float(np.percentile(a, q)) if a.size else 0.0
 
 
-def top_neurons_ranked(rec: Recording, row: int, k: int = 12) -> list[dict]:
+def layer_references(rec: Recording, q: float = 99.9) -> np.ndarray:
+    """(L,) every layer's usual range. Uses a sample of positions on long replies
+    (an exact percentile over every value takes ~0.5 s for 500 tokens)."""
+    T, L, N = rec.mlp.shape
+    rows = np.linspace(0, T - 1, num=min(T, 64)).astype(int) if T else np.arange(0)
+    a = np.abs(rec.mlp[rows].astype(np.float32))  # (t, L, N)
+    if not a.size:
+        return np.zeros(L, np.float32)
+    return np.percentile(a.transpose(1, 0, 2).reshape(L, -1), q, axis=1).astype(np.float32)
+
+
+def top_neurons_ranked(rec: Recording, row: int, k: int = 12, refs: np.ndarray | None = None) -> list[dict]:
     """At one position, the neurons that fired hardest relative to their own layer's
     usual range, across all layers."""
-    L = rec.mlp.shape[1]
     vals = rec.mlp[row].astype(np.float32)  # (L, N)
-    refs = np.array([max(layer_reference(rec, i), 1e-6) for i in range(L)], np.float32)
+    if refs is None:
+        refs = layer_references(rec)
+    refs = np.maximum(np.asarray(refs, np.float32), 1e-6)
     rel = np.abs(vals) / refs[:, None]
     flat = np.argpartition(-rel.ravel(), k - 1)[:k]
     flat = flat[np.argsort(-rel.ravel()[flat])]
