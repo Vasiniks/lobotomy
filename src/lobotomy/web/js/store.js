@@ -113,12 +113,20 @@ export function findReply(id) {
   return null;
 }
 
-export async function ensureDetail(replyId) {
-  if (state.details.has(replyId)) return state.details.get(replyId);
-  const [detail, layers] = await Promise.all([api.reply(replyId), api.layers(replyId)]);
-  detail.layers = layers.layers;
-  state.details.set(replyId, detail);
-  return detail;
+const pendingDetails = new Map();
+export function ensureDetail(replyId) {
+  if (state.details.has(replyId)) return Promise.resolve(state.details.get(replyId));
+  if (!pendingDetails.has(replyId)) {
+    const p = Promise.all([api.reply(replyId), api.layers(replyId)])
+      .then(([detail, layers]) => {
+        detail.layers = layers.layers;
+        state.details.set(replyId, detail);
+        return detail;
+      })
+      .finally(() => pendingDetails.delete(replyId));
+    pendingDetails.set(replyId, p);
+  }
+  return pendingDetails.get(replyId);
 }
 
 export async function layerData(replyId, layer, rows = "reply") {

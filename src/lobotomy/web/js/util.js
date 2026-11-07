@@ -151,8 +151,16 @@ export function debounce(fn, ms) {
 // When a view starts loading something new, replace the old view at once
 // (instead of leaving it on screen under the new URL).
 export function showLoading(body, viewKey) {
-  if (body.dataset.view === viewKey) return;
+  if (body.dataset.view === viewKey || body.dataset.view === `${viewKey}:loading`) return;
   body.dataset.view = `${viewKey}:loading`;
   clear(body);
-  body.append(h("div", { class: "loading" }, h("p", {}, "Loading…")));
+  const msg = h("p", {}, "Loading…");
+  body.append(h("div", { class: "loading" }, msg));
+  // never hang silently: after a while, say so and offer a retry
+  setTimeout(() => {
+    if (body.dataset.view === `${viewKey}:loading` && msg.isConnected) {
+      msg.textContent = "Still loading. The model may be busy with another request. ";
+      msg.append(h("a", { href: location.hash, onclick: () => location.reload() }, "Reload"));
+    }
+  }, 10000);
 }
