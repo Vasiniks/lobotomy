@@ -513,7 +513,12 @@ class Engine:
         if rec is None or rec.mlp is None or not rec.n_positions:
             return None
         idx, val = top_by_layer(rec.mlp[-1], self.flow_k)
-        return {"idx": idx.tolist(), "val": np.round(val, 3).tolist()}
+        heads = rec.heads[-1]
+        return {
+            "idx": idx.tolist(),
+            "val": np.round(val, 3).tolist(),
+            "heads": [np.round(heads[i, : self.config.n_layer_heads(i)], 3).tolist() for i in range(self.config.n_layers)],
+        }
 
     def _trim_old_recordings(self) -> None:
         replies = sorted((r for ex in self.exchanges for r in ex.replies), key=lambda r: r.id)
@@ -692,7 +697,18 @@ class Engine:
         scale = np.maximum(np.asarray(reply.layer_refs(), np.float32), 1e-6)
         idx, val = top_by_layer(rec.mlp[rows], k)  # (S, L, k)
         q = np.round(np.clip(np.abs(val) / scale[None, :, None], 0, 1) * 255).astype(np.uint8)
+        # heads: each one's output size, against the layer's 99th percentile over the reply
+        cfg = self.config
+        n_heads = [cfg.n_layer_heads(i) for i in range(cfg.n_layers)]
+        heads = np.nan_to_num(rec.heads[rows].astype(np.float32), nan=0.0)  # (S, L, H)
+        head_scale = np.array(
+            [max(float(np.percentile(heads[:, i, : n_heads[i]], 99)), 1e-6) for i in range(cfg.n_layers)], np.float32
+        )
+        hq = np.round(np.clip(heads / head_scale[None, :, None], 0, 1) * 255).astype(np.uint8)
         return {
+            "heads": base64.b64encode(hq.tobytes()).decode(),
+            "n_heads": n_heads,
+            "head_scale": head_scale.tolist(),
             "steps": steps,
             "k": int(idx.shape[-1]),
             "n_layers": int(idx.shape[1]),
@@ -755,6 +771,42 @@ class Engine:
             "promotes": [tok.token_str(int(i)) for i in ids_up[0]],
             "suppresses": [tok.token_str(int(i)) for i in ids_dn[0]],
         }
+
+    def neuron_wiring(self, layer: int, neuron: int, k: int = 4) -> list[dict]:
+        """Where a neuron's output goes, read straight from the healthy weights.
+
+        The neuron writes its down_proj column d into the residual stream. A
+        later layer's MLP reads the stream through its norm gain g (1 + w) and
+        its up_proj rows, so the connection to neuron m of layer L' is
+        up[m] · (g ⊙ d): how far one unit of this neuron's (positive) activation
+        moves m's input. Like the vocabulary reading, it ignores what the mixers
+        and the norm's scaling do in between. The k strongest per later layer.
+        """
+        cfg = self.config
+        if not (0 <= layer < cfg.n_layers and 0 <= neuron < cfg.intermediate_size):
+            raise ValueError(f"no neuron {neuron} in layer {layer}")
+        with self._lock:
+            try:
+                rows = self.backend.neuron_wiring(layer, neuron, k)
+            except NotImplementedError:
+                rows = self._wiring_numpy(layer, neuron, k)
+        return [
+            {"layer": int(later), "neuron": int(i), "weight": float(v)}
+            for later, idx, w in rows
+            for i, v in zip(idx, w)
+        ]
+
+    def _wiring_numpy(self, layer: int, neuron: int, k: int):
+        be = self.backend
+        d = be.read_pristine(f"model.layers.{layer}.mlp.down_proj.weight")[:, neuron]
+        out = []
+        for later in range(layer + 1, self.config.n_layers):
+            p = f"model.layers.{later}."
+            gain = be.read_pristine(p + "post_attention_layernorm.weight") + 1.0
+            s = be.read_pristine(p + "mlp.up_proj.weight") @ (gain * d)
+            idx = np.argsort(-np.abs(s), kind="stable")[:k]
+            out.append((later, idx, s[idx]))
+        return out
 
     # --- misc ----------------------------------------------------------------------
 

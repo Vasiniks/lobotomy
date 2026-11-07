@@ -393,7 +393,7 @@ function place(pop, anchor) {
 
 // The edit popover: Off, a log slider from off to x16, Boost x2, Noise, Reset.
 // Changes apply to the weights immediately; the reply changes when you ask again.
-export function openEditPopover(anchor, { target, title, sub, info, note, says, trace, sign = 1, onClose = null }) {
+export function openEditPopover(anchor, { target, title, sub, info, note, says, trace, sign = 1, extra = null, onClose = null }) {
   closePopover();
   onPopClose = onClose;
   const current = () => S.editFor(target, "scale");
@@ -451,6 +451,7 @@ export function openEditPopover(anchor, { target, title, sub, info, note, says, 
         h("span", {}, "and pushes down"),
         h("span", { class: "toks" }, down.slice(0, 6).map((t) => h("code", {}, showToken(t)))),
       );
+      if (openPop === pop) place(pop, anchor); // it grew: keep it on screen
     }).catch(() => {});
   }
 
@@ -461,6 +462,7 @@ export function openEditPopover(anchor, { target, title, sub, info, note, says, 
     info ? h("p", { class: "meta" }, info) : null,
     traceEl,
     saysEl,
+    extra,
     h(
       "div",
       { class: "scale-slider" },

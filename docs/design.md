@@ -143,8 +143,20 @@ are the calls made while building it:
 - **A clicked neuron opens the same editor as the layer view,** and lights the
   timeline by that neuron's activity (where it fired). Edited neurons keep their
   ring colour in 3D; "off" is a ring cut through, like the 2D cells.
-- **Not built yet:** lines to the neurons a neuron feeds in later layers (its
-  wiring), heads and attention in 3D.
+- **Heads are tiles along each sheet's far edge,** height and lightness by the
+  head's output size against the layer's 99th percentile over the reply, with
+  their own lines from the middle. A pulled-out layer's heads are clickable
+  and open the head editor.
+- **Wiring is read from the healthy weights,** like "pushes up": the 4
+  strongest connections into every later layer, up[m] · ((1 + g) ⊙ d).
+  Solid lines boost and dashed lines suppress (sign flipped when the neuron
+  fired negative at that word). The popover lists the strongest six; clicking
+  one pulls out that layer and opens that neuron.
+- **Attention is drawn into the timeline:** when the playhead (or a pulled-out
+  layer) is on an attention layer and paused, lines run from the sheet, or from
+  a clicked head, down to the words it looked at most. "Your message" collects
+  the prompt and anything earlier in the chat. DeltaNet heads have no
+  attention weights to draw, and their popover says so.
 
 ## Non-goals for now
 

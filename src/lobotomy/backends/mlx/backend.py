@@ -302,6 +302,26 @@ class MLXBackend(Backend):
     def read_tensor(self, tensor):
         return np.array(self.model.w[tensor].astype(mx.float32))
 
+    def neuron_wiring(self, layer, neuron, k):
+        P = lambda name: self._pristine.get(name, self.model.w[name])  # noqa: E731
+        d = P(f"model.layers.{layer}.mlp.down_proj.weight")[:, neuron].astype(mx.float32)
+        scores = []
+        for later in range(layer + 1, self.config.n_layers):
+            p = f"model.layers.{later}."
+            gain = P(p + "post_attention_layernorm.weight").astype(mx.float32) + 1.0  # stored as w, gain 1 + w
+            up = P(p + "mlp.up_proj.weight")
+            scores.append((up @ (gain * d).astype(up.dtype)).astype(mx.float32))
+        if not scores:
+            return []
+        S = np.array(mx.stack(scores))
+        out = []
+        for j, s in enumerate(S):
+            kk = min(k, s.shape[0])
+            idx = np.argpartition(-np.abs(s), kk - 1)[:kk]
+            idx = idx[np.argsort(-np.abs(s[idx]), kind="stable")]
+            out.append((layer + 1 + j, idx, s[idx]))
+        return out
+
     def read_pristine(self, tensor):
         return np.array(self._pristine.get(tensor, self.model.w[tensor]).astype(mx.float32))
 

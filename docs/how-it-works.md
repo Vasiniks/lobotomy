@@ -144,6 +144,40 @@ word among the candidates in its word view.
 `test_lens_grid_last_layer_is_the_real_output_probability` checks this for every
 word.
 
+## The 3D view
+
+**Lines to neurons.** At every layer, lines go from the line through the
+sheets (the residual stream) to that layer's 48 strongest neurons for the
+word. Thickness is the size of the activation against the layer's 99.9th
+percentile over the reply, the same reference "Why this word?" uses.
+**Check:** pull out a layer at a word and open the 2D layer view for the same
+word (Open in 2D, then pick the word). The thickest lines go to the brightest
+cells.
+
+**Head tiles.** A tile's height and lightness is the size of what that head
+wrote into the stream for this word (the same number as in the head cells),
+against the layer's 99th percentile over the reply. **Check:** the word view
+lists every head's value for the word; the tallest tile has the largest.
+
+**Wiring.** A neuron writes its `down_proj` column `d` into the stream. A
+later MLP reads the stream through its norm gain `1 + g` and its `up_proj`
+rows, so the connection to neuron `m` there is `up[m] · ((1 + g) ⊙ d)`: how
+far one unit of this neuron's activation moves `m`'s input. Positive means it
+boosts `m`, negative means it suppresses it; if the neuron fired negative at
+this word, the signs flip. It is read from the healthy weights and ignores the
+mixers in between, the gate, and the norm's division by the stream's size, so
+treat it like "pushes up": a map of where the signal is sent, not a measured
+effect. **Check:** `test_neuron_wiring_reads_the_healthy_weights` recomputes
+it with numpy.
+
+**Where attention looked.** From the word at the playhead, each attention
+head splits 100% of its attention over every earlier position. The lines go
+to the words with the largest share (averaged over the heads, or one head if
+you clicked it); "your message" adds up the prompt and earlier chat.
+**Check:** the word view's attention section lists the same words and
+percentages for that word and layer, and `test_server.py` checks every head
+sums to 1.
+
 ## Quantization
 
 The GGUF stores most weights in 4 to 6 bits per number. lobotomy expands them

@@ -61,6 +61,18 @@ def test_chat_edit_again_inspect(client, fresh):
     flow = client.get(f"/api/replies/{reply['id']}/flow?k=8").json()
     assert len(flow["steps"]) == len(reply_rows) + 1 and flow["k"] == 8
     assert all(len(e["flow"]["idx"]) == 24 for e in ev if e["type"] == "token")
+    assert all(len(e["flow"]["heads"][3]) == 8 for e in ev if e["type"] == "token")
+
+    row = flow["steps"][-1]["row"]
+    look = client.get(f"/api/replies/{reply['id']}/look/{row}").json()
+    assert sorted(look["layers"], key=int) == ["3", "7", "11", "15", "19", "23"]
+    l3 = look["layers"]["3"]
+    assert len(l3["rows"]) == 8 and len(l3["rows"][0]) == row + 1
+    total = l3["before"][0] + sum(l3["rows"][0])
+    assert abs(total - 1) < 0.02  # every head's attention adds up to 1
+
+    wiring = client.get("/api/neuron/5/100/wiring?k=2").json()["targets"]
+    assert len(wiring) == 2 * (24 - 6) and wiring[0]["layer"] == 6
 
     lay = client.get(f"/api/replies/{reply['id']}/layer/11").json()
     assert len(lay["grid"]) == fresh.config.intermediate_size and lay["n_heads"] == 8 and len(lay["top"]) == 40

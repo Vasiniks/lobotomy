@@ -79,6 +79,8 @@ export const api = {
   damage: (id) => json("GET", `/api/replies/${id}/damage`),
   lens: (id) => json("GET", `/api/replies/${id}/lens`),
   flow: (id, k = 96) => json("GET", `/api/replies/${id}/flow?k=${k}`),
+  look: (id, row) => json("GET", `/api/replies/${id}/look/${row}`),
+  wiring: (layer, n, k = 4) => json("GET", `/api/neuron/${layer}/${n}/wiring?k=${k}`),
   why: (id, row, k = 12) => json("GET", `/api/replies/${id}/why/${row}?k=${k}`),
   scan: (id, params) => json("GET", `/api/replies/${id}/scan?${new URLSearchParams(params)}`),
   tokenize: (text) => json("GET", `/api/tokenize?text=${encodeURIComponent(text)}`),

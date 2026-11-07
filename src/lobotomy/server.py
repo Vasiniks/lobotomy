@@ -491,6 +491,34 @@ def create_app(engine: Engine) -> FastAPI:
         r = api.full(reply_id)
         return await api.run(eng.flow, r, k)
 
+    @app.get("/api/replies/{reply_id}/look/{row}")
+    async def look(reply_id: int, row: int):
+        """Where every attention head looked from one position: its weight on each
+        recorded row up to here, plus its share on positions before the recording."""
+        r = api.full(reply_id)
+        rec = r.recording
+        if not 0 <= row < rec.n_positions:
+            raise HTTPException(404, "no such row")
+        pos0 = int(rec.positions[0])
+        here = int(rec.positions[row])
+        layers = {}
+        for layer, probs in rec.attention.items():
+            p = probs[row].astype(np.float32)  # (heads, keys by absolute position)
+            layers[str(layer)] = {
+                "before": _rl(p[:, :pos0].sum(1)),
+                "rows": [_rl(hp, 4) for hp in p[:, pos0 : here + 1]],
+            }
+        return {"row": row, "layers": layers}
+
+    @app.get("/api/neuron/{layer}/{neuron}/wiring")
+    async def wiring(layer: int, neuron: int, k: int = Query(4, ge=1, le=64)):
+        """The later neurons this one feeds most, from the healthy weights."""
+        try:
+            targets = await api.run(eng.neuron_wiring, layer, neuron, k)
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+        return {"layer": layer, "neuron": neuron, "targets": targets}
+
     @app.get("/api/replies/{reply_id}/lens")
     async def lens(reply_id: int):
         """Logit-lens grid: per reply token, the probability each layer already gave it."""

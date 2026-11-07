@@ -287,3 +287,40 @@ def test_token_events_carry_their_strongest_neurons(fresh):
     row = next(t["row"] for t in toks if t["role"] == "reply") - 1
     a = np.abs(r.recording.mlp[row].astype(np.float32))
     assert [ix[0] for ix in first["idx"]] == a.argmax(axis=1).tolist()
+
+
+def test_flow_carries_head_activity(fresh):
+    import base64
+
+    r = fresh.chat(Q)
+    f = fresh.flow(r, k=8)
+    S, L, H = len(f["steps"]), fresh.config.n_layers, fresh.config.max_heads
+    heads = np.frombuffer(base64.b64decode(f["heads"]), np.uint8).reshape(S, L, H)
+    assert f["n_heads"] == [fresh.config.n_layer_heads(i) for i in range(L)]
+    # layers with fewer heads than the widest leave the rest empty
+    attn = next(i for i in range(L) if fresh.config.is_full_attention(i))
+    assert (heads[:, attn, f["n_heads"][attn] :] == 0).all()
+    assert heads.max() == 255 and len(f["head_scale"]) == L
+    # the strongest head at a step is the one with the largest recorded output
+    row = f["steps"][2]["row"]
+    want = np.nanargmax(r.recording.heads[row, 0, : f["n_heads"][0]])
+    assert heads[2, 0].argmax() == want
+
+
+def test_neuron_wiring_reads_the_healthy_weights(fresh):
+    k = 3
+    w = fresh.neuron_wiring(20, 1234, k=k)
+    L = fresh.config.n_layers
+    assert [x["layer"] for x in w] == [l for l in range(21, L) for _ in range(k)]
+    be = fresh.backend
+    d = be.read_pristine("model.layers.20.mlp.down_proj.weight")[:, 1234]
+    gain = be.read_pristine("model.layers.21.post_attention_layernorm.weight") + 1.0
+    s = be.read_pristine("model.layers.21.mlp.up_proj.weight") @ (gain * d)
+    top = np.argsort(-np.abs(s))[:k]
+    first = [x for x in w if x["layer"] == 21]
+    assert [x["neuron"] for x in first] == top.tolist()
+    assert np.allclose([x["weight"] for x in first], s[top], rtol=0.05, atol=1e-3)
+    # edits don't change it (like "says", it shows where the signal would go)
+    fresh.add_edit(Target("neuron", layer=21, index=first[0]["neuron"]), value=0.0)
+    assert fresh.neuron_wiring(20, 1234, k=k)[0]["neuron"] == first[0]["neuron"]
+    assert fresh.neuron_wiring(L - 1, 0) == []

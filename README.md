@@ -44,8 +44,11 @@ yet, so it refuses to load them.
   underneath plays, pauses and steps through the reply: Shift ← → moves one
   word, ← → one layer. While the model writes, the sheets light up live. Click a
   sheet to pull it out, then a neuron to edit it. The timeline then lights up
-  wherever that neuron fired. The 3D / Activity / Lens switch brings back the 2D
-  strips.
+  wherever that neuron fired, and lines run to the later neurons it feeds
+  (solid boosts, dashed suppresses; the list in its popover jumps there). Each
+  sheet's heads are tiles along its far edge; click one to edit it. On an
+  attention layer, lines run down into the timeline to the words it looked at.
+  The 3D / Activity / Lens switch brings back the 2D strips.
 - **Chat.** Replies stream in; every word is clickable. In *Activity* mode the
   layer stack shows one strip per layer and one cell per word, lit by how hard
   that layer fired. **What matters here?** cuts each layer alone and shows how

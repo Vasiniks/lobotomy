@@ -170,6 +170,12 @@ class Backend(ABC):
         """
         raise NotImplementedError
 
+    def neuron_wiring(self, layer: int, neuron: int, k: int) -> list[tuple[int, np.ndarray, np.ndarray]]:
+        """Optional fast path for ``Engine.neuron_wiring``: for every later layer,
+        ``(layer, indices (k,), weights (k,))`` of its k strongest connections,
+        from the healthy (pristine) weights. The engine has a numpy fallback."""
+        raise NotImplementedError
+
     def attribute(self, token_ids: list[int], target_pos: int) -> tuple[float, np.ndarray, np.ndarray]:
         """Attribution: ``(logp, grad_mlp (L, N), grad_heads (L, H_max))`` where the
         grads are d log p(token_ids[target_pos] | prefix) / d mask, for
