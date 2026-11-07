@@ -331,18 +331,24 @@ function placeCursor(root, i, n) {
 // --- popovers -------------------------------------------------------------------------------
 
 let openPop = null;
+let openAnchor = null;
 export function closePopover() {
   openPop?.remove();
   openPop = null;
 }
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closePopover();
+  if (e.key === "Escape" && openPop) {
+    const a = openAnchor;
+    closePopover();
+    if (a?.isConnected && typeof a.focus === "function") a.focus(); // back to what opened it
+  }
 });
 document.addEventListener("mousedown", (e) => {
   if (openPop && !openPop.contains(e.target) && !e.target.closest("[data-pop-anchor]")) closePopover();
 });
 
 function place(pop, anchor) {
+  openAnchor = anchor;
   document.body.append(pop);
   const a = anchor.getBoundingClientRect();
   const p = pop.getBoundingClientRect();

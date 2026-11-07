@@ -63,6 +63,8 @@
 .head-cell:hover .head { box-shadow: 0 0 0 1px var(--ink-2); }
 .head-cell.is-selected .head { outline: 1px solid var(--select); outline-offset: 3px; }
 .list tr { cursor: pointer; }
+.list tr:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: -2px; }
+.list tr:focus-visible .row-actions, .list tr:focus-within .row-actions { opacity: 1; }
 .list td.cost { font-family: var(--font-mono); font-size: var(--text-xs); text-align: right; }
 .layer-tools .btn { height: 30px; }
 .scan-note { font-size: var(--text-xs); color: var(--ink-3); max-width: 60ch; }

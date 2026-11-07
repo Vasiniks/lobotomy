@@ -238,9 +238,17 @@ function renderLayer(section, layer, reply, detail, data, row) {
           "tr",
           {
             "data-pop-anchor": "",
+            tabindex: 0,
+            "aria-label": `Neuron ${t.neuron}, peak ${fmt(t.peak)}. Press Enter to edit.`,
             onclick: (ev) => {
               if (ev.target.closest("button")) return;
               openNeuron(row, layer, t.neuron, reply, detail, data, t);
+            },
+            onkeydown: (ev) => {
+              if ((ev.key === "Enter" || ev.key === " ") && ev.target === row) {
+                ev.preventDefault();
+                openNeuron(row, layer, t.neuron, reply, detail, data, t);
+              }
             },
           },
           h("td", { class: "mono" }, String(t.neuron)),
