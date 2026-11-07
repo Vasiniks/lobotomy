@@ -85,6 +85,9 @@ yet, so it refuses to load them.
 
 ![Healthy: "The capital of Australia is Canberra." With 10 edits: "Australia's capital city is Sydney."](docs/screenshots/compare.png)
 
+What every number means (damage, cut cost, attribution, the lens), with a way
+to check each one yourself: [docs/how-it-works.md](docs/how-it-works.md).
+
 The visual design (tokens, logos, mockups) is in [design/](design/DESIGN.md).
 
 ## The terminal interface
