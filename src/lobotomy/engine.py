@@ -97,6 +97,7 @@ class Engine:
         dtype: str = "bfloat16",
         system_prompt: str | None = None,
         on_progress: Callable[[str], None] | None = None,
+        use_cache: bool = True,
     ):
         say = on_progress or (lambda msg: None)
         self.model_path = Path(model_path)
@@ -107,11 +108,8 @@ class Engine:
         self.tokenizer = ChatTokenizer(g.tokenizer)
         name = backend or default_backend()
         self.backend = get_backend(name, dtype=dtype) if name == "mlx" else get_backend(name)
-        say("dequantizing weights")
         t0 = time.time()
-        weights = g.load_weights(dtype=np.float32)
-        say(f"loading weights into {name}")
-        self.backend.load(weights, self.config)
+        self._load_weights(g, name, dtype, use_cache, say)
         self.load_seconds = time.time() - t0
         self.edit_stack = EditStack(self.config)
         self.exchanges: list[Exchange] = []
@@ -122,6 +120,34 @@ class Engine:
         self._ids = {"exchange": 1, "reply": 1}
         self._cancel = threading.Event()
         self.busy = False
+
+    def _cache_path(self, dtype: str) -> Path:
+        st = self.model_path.stat()
+        tag = f"{self.model_path.stem}.{dtype}.{st.st_size}.{int(st.st_mtime)}"
+        return self.model_path.parent / ".cache" / f"{tag}.safetensors"
+
+    def _load_weights(self, g, name: str, dtype: str, use_cache: bool, say) -> None:
+        can_cache = use_cache and hasattr(self.backend, "load_cache")
+        cache = self._cache_path(dtype) if can_cache else None
+        if cache is not None and cache.exists():
+            say("loading cached weights")
+            try:
+                self.backend.load_cache(cache, self.config)
+                return
+            except Exception as exc:  # corrupt or stale cache: rebuild it
+                say(f"cache unusable ({exc}); rebuilding")
+        say("dequantizing weights (first run only; cached afterwards)" if can_cache else "dequantizing weights")
+        weights = g.load_weights(dtype=np.float32)
+        say(f"loading weights into {name}")
+        self.backend.load(weights, self.config)
+        if cache is not None:
+            try:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                for old in cache.parent.glob(f"{self.model_path.stem}.{dtype}.*.safetensors"):
+                    old.unlink()
+                self.backend.save_cache(cache)
+            except OSError as exc:
+                say(f"couldn't write weight cache: {exc}")
 
     # --- edits -------------------------------------------------------------------
 

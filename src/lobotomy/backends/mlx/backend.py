@@ -76,6 +76,19 @@ class MLXBackend(Backend):
         self.model = Qwen35(config, w)
         self._pristine.clear()
 
+    def save_cache(self, path) -> None:
+        """Save the pristine weights, so the next start skips dequantizing the GGUF."""
+        w = dict(self.model.w)
+        w.update(self._pristine)  # never cache edited values
+        mx.save_safetensors(str(path), w)
+
+    def load_cache(self, path, config: ModelConfig) -> None:
+        self.config = config
+        w = mx.load(str(path))
+        mx.eval(list(w.values()))
+        self.model = Qwen35(config, w)
+        self._pristine.clear()
+
     # --- inference -------------------------------------------------------------
 
     def new_cache(self):

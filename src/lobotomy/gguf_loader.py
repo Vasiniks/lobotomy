@@ -17,7 +17,8 @@ layout ``(out_features, in_features)``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -28,6 +29,7 @@ from gguf.quants import dequantize
 from .config import ModelConfig
 
 ARCH = "qwen35"
+META_VERSION = 1
 
 _LAYER_MAP = {
     "attn_norm.weight": "input_layernorm.weight",
@@ -86,11 +88,17 @@ class GGUFModel:
     config: ModelConfig
     tokenizer: TokenizerData
     tensor_types: dict[str, str]  # hf name -> original GGUF quant type, for display
-    _reader: GGUFReader
+    _reader: GGUFReader | None = None
+
+    @property
+    def reader(self) -> GGUFReader:
+        if self._reader is None:  # opened lazily when metadata came from the cache
+            self._reader = GGUFReader(self.path)
+        return self._reader
 
     def iter_weights(self, dtype=np.float16) -> Iterator[tuple[str, np.ndarray]]:
         """Yield (hf_name, array). 2-D matrices are cast to ``dtype``; vectors stay float32."""
-        for t in self._reader.tensors:
+        for t in self.reader.tensors:
             name, arr = _convert(t.name, _tensor_to_float(t))
             if name is None:
                 continue
@@ -98,9 +106,17 @@ class GGUFModel:
                 arr = arr.astype(dtype)
             yield name, arr
 
+    def to_meta(self) -> dict:
+        return {
+            "version": META_VERSION,
+            "config": asdict(self.config),
+            "tokenizer": asdict(self.tokenizer),
+            "tensor_types": self.tensor_types,
+        }
+
     def load_weights(self, dtype=np.float16, on_progress: Callable[[int, int], None] | None = None) -> dict[str, np.ndarray]:
         out = {}
-        n = len(self._reader.tensors)
+        n = len(self.reader.tensors)
         for i, (name, arr) in enumerate(self.iter_weights(dtype)):
             out[name] = arr
             if on_progress:
@@ -154,8 +170,43 @@ def _convert(gguf_name: str, arr: np.ndarray) -> tuple[str | None, np.ndarray]:
     return name, arr
 
 
-def open_gguf(path: str | Path) -> GGUFModel:
+def meta_cache_path(path: Path) -> Path:
+    st = path.stat()
+    return path.parent / ".cache" / f"{path.stem}.{st.st_size}.{int(st.st_mtime)}.meta.json"
+
+
+def open_gguf(path: str | Path, use_cache: bool = True) -> GGUFModel:
+    """Open a GGUF. Parsing its metadata takes seconds (a 248k-entry vocabulary),
+    so the parsed metadata is cached as JSON beside the file in ``.cache/``."""
     path = Path(path)
+    cache = meta_cache_path(path) if use_cache else None
+    if cache is not None and cache.exists():
+        try:
+            meta = json.loads(cache.read_text())
+            if meta.get("version") == META_VERSION:
+                cfg = meta["config"]
+                cfg["eos_token_ids"] = tuple(cfg["eos_token_ids"])
+                return GGUFModel(
+                    path=path,
+                    config=ModelConfig(**cfg),
+                    tokenizer=TokenizerData(**meta["tokenizer"]),
+                    tensor_types=meta["tensor_types"],
+                )
+        except (OSError, ValueError, TypeError, KeyError):
+            pass  # fall through and re-parse
+    model = _parse_gguf(path)
+    if cache is not None:
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            for old in cache.parent.glob(f"{path.stem}.*.meta.json"):
+                old.unlink()
+            cache.write_text(json.dumps(model.to_meta()))
+        except OSError:
+            pass
+    return model
+
+
+def _parse_gguf(path: Path) -> GGUFModel:
     reader = GGUFReader(path)
     arch = _field(reader, "general.architecture")
     if arch != ARCH:
