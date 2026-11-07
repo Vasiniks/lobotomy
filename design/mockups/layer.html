@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lobotomy: layer 14</title>
+<link rel="icon" href="../logo/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500;700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,560;0,720;1,400&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="lobotomy: back to the design gallery">
+      <img class="on-dark" src="../logo/a-severed/lockup-on-dark.svg" alt="lobotomy">
+      <img class="on-light" src="../logo/a-severed/lockup-on-light.svg" alt="lobotomy">
+    </a>
+    <div class="model"><strong>Qwen3.5 0.8B</strong><span>Q4_K_M</span><span>MLX</span></div>
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="main.html">Chat</a><span aria-hidden="true">/</span><span aria-current="page">Layer 14</span></nav>
+    <div class="topbar-end">
+      <div class="health" title="4 edits active">
+        <span class="swatches"><i class="swatch edit-up-2"></i><i class="swatch edit-off"></i><i class="swatch edit-down-1"></i><i class="swatch edit-off"></i></span>
+        4 edits
+      </div>
+      <button class="btn btn-quiet" type="button" data-theme-toggle>Light theme</button>
+    </div>
+  </header>
+
+  <main class="body is-layer">
+
+    <!-- layer navigation -->
+    <nav class="minimap" aria-label="Layers">
+      <div class="pane-head"><h2>Layers</h2></div>
+      <div class="stack-wrap">
+        <div class="strips" data-run="healthy" data-layer="14" data-compact data-href="layer.html"></div>
+      </div>
+    </nav>
+
+    <!-- the layer -->
+    <section class="layer" aria-labelledby="layer-title">
+      <header class="layer-head">
+        <div>
+          <h1 id="layer-title">Layer 14</h1>
+          <p class="meta">Gated DeltaNet. 3,584 MLP neurons, 16 heads of 128 dims. Peak 7.92 on “Canberra”.</p>
+        </div>
+        <div class="layer-tools">
+          <div class="seg" role="group" aria-label="Show activity for">
+            <button type="button" aria-pressed="true">Whole reply</button>
+            <button type="button" aria-pressed="false">“Canberra”</button>
+          </div>
+          <button class="btn" type="button">Edit whole layer</button>
+        </div>
+      </header>
+
+      <div class="layer-grid">
+        <div class="grid-area">
+          <h2 class="sub">Neurons <span class="meta">64 × 56, one cell each, strongest value over the reply</span></h2>
+          <div class="grid-frame">
+            <div class="grid-top" aria-hidden="true"><span style="left:1px">+0</span><span style="left:145px">+16</span><span style="left:289px">+32</span><span style="left:433px">+48</span></div>
+            <div class="grid-left" aria-hidden="true"><span style="top:1px">0</span><span style="top:73px">512</span><span style="top:145px">1024</span><span style="top:217px">1536</span><span style="top:289px">2048</span><span style="top:361px">2560</span><span style="top:433px">3072</span></div>
+            <div class="ngrid" data-layer="14" data-selected="938" role="img" aria-label="Activity of all 3,584 neurons in layer 14. 49 fired above 1.0."></div>
+          </div>
+
+          <div class="popover" data-anchor-to="938" role="dialog" aria-labelledby="pop-title">
+            <div class="popover-head"><h3 id="pop-title">Neuron 938</h3><span class="meta">layer 14</span></div>
+            <p class="meta">Peak 5.88 on “Canberra”. Above 1.0 on 4 of 43 tokens.</p>
+            <div class="scale-slider">
+              <input type="range" min="-4" max="4" step="0.25" value="-1" aria-label="Scale" aria-valuetext="times 0.5">
+              <div class="ticks" aria-hidden="true"><span>off</span><span></span><span>×¼</span><span></span><span class="mid">×1</span><span></span><span>×4</span><span></span><span>×16</span></div>
+            </div>
+            <div class="popover-actions">
+              <button class="btn" type="button" aria-pressed="false">Off</button>
+              <button class="btn" type="button">Boost ×2</button>
+              <button class="btn btn-quiet" type="button">Reset</button>
+              <span class="readout" aria-live="polite">×0.5</span>
+            </div>
+            <p class="meta">Applies from the next reply.</p>
+          </div>
+
+          <h2 class="sub">Heads <span class="meta">output size over the reply</span></h2>
+          <div class="heads" data-layer="14" aria-label="16 DeltaNet heads"></div>
+        </div>
+
+        <div class="top-list">
+          <h2 class="sub">Strongest neurons <span class="meta">12 of 3,584. 49 fired above 1.0.</span></h2>
+          <table class="list">
+            <thead><tr><th>Neuron</th><th class="r">Peak</th><th>On</th><th>Edit</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">2817</td><td class="r num">7.92<span class="bar act-8"><b style="width:100%"></b></span></td><td>Canberra</td><td><span class="edit-tag"><i class="swatch edit-off"></i>off</span></td></tr>
+              <tr class="is-selected"><td class="mono">938</td><td class="r num">5.88<span class="bar act-8"><b style="width:74%"></b></span></td><td>Canberra</td><td><span class="edit-tag"><i class="swatch edit-down-1"></i>×0.5</span></td></tr>
+              <tr class="is-hover"><td class="mono">1450</td><td class="r num">4.71<span class="bar act-8"><b style="width:59%"></b></span></td><td>Parliament</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">3301</td><td class="r num">4.05<span class="bar act-8"><b style="width:51%"></b></span></td><td>Melbourne</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">217</td><td class="r num">−3.62<span class="bar act-7"><b style="width:46%"></b></span></td><td>compromise</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">2044</td><td class="r num">3.38<span class="bar act-7"><b style="width:43%"></b></span></td><td>capital</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">1190</td><td class="r num">3.11<span class="bar act-7"><b style="width:39%"></b></span></td><td>Sydney</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">675</td><td class="r num">2.97<span class="bar act-7"><b style="width:37%"></b></span></td><td>planned</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">3517</td><td class="r num">−2.80<span class="bar act-7"><b style="width:35%"></b></span></td><td class="mono">.</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">1736</td><td class="r num">2.64<span class="bar act-7"><b style="width:33%"></b></span></td><td>chosen</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">402</td><td class="r num">2.51<span class="bar act-6"><b style="width:32%"></b></span></td><td>Australia</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">2961</td><td class="r num">2.38<span class="bar act-6"><b style="width:30%"></b></span></td><td>city</td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+            </tbody>
+          </table>
+          <p class="meta list-note">Negative values fired just as hard in the other direction. Cell strength follows the size; the sign is in the number.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- edits -->
+    <aside class="rail" aria-label="Edits">
+      <div class="pane-head"><h2>Edits</h2><span class="count num">4</span></div>
+      <ol class="edit-list">
+        <li class="edit">
+          <i class="swatch swatch-lg edit-up-2"></i>
+          <span class="edit-target">L12 N3090</span>
+          <span class="edit-val">×4</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Boosted. Fired 3.48 on “Sydney”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L14 N2817</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 7.92 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-down-1"></i>
+          <span class="edit-target">L14 N938</span>
+          <span class="edit-val">×0.5</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 5.88 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L15 H5</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Attention head. Looked at “Australia”.</span>
+        </li>
+      </ol>
+      <div class="rail-foot">
+        <a class="btn btn-primary" href="compare.html">Ask again</a>
+        <button class="btn" type="button">Back to healthy</button>
+      </div>
+    </aside>
+
+  </main>
+</div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

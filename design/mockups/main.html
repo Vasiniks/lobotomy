@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lobotomy: chat and layers</title>
+<link rel="icon" href="../logo/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500;700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,560;0,720;1,400&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="lobotomy: back to the design gallery">
+      <img class="on-dark" src="../logo/a-severed/lockup-on-dark.svg" alt="lobotomy">
+      <img class="on-light" src="../logo/a-severed/lockup-on-light.svg" alt="lobotomy">
+    </a>
+    <div class="model"><strong>Qwen3.5 0.8B</strong><span>Q4_K_M</span><span>MLX</span></div>
+    <div class="topbar-end">
+      <div class="health" title="4 edits active">
+        <span class="swatches"><i class="swatch edit-up-2"></i><i class="swatch edit-off"></i><i class="swatch edit-down-1"></i><i class="swatch edit-off"></i></span>
+        4 edits
+      </div>
+      <button class="btn btn-quiet" type="button" data-theme-toggle>Light theme</button>
+    </div>
+  </header>
+
+  <main class="body">
+
+    <!-- chat -->
+    <section class="chat" aria-label="Chat">
+      <div class="transcript">
+        <article class="msg msg-user">
+          <div class="who">You</div>
+          <p class="msg-body">What is the capital of Australia?</p>
+        </article>
+        <article class="msg msg-model">
+          <div class="who">Model</div>
+          <p class="msg-body"><span class="tok">The</span> <span class="tok">capital</span> <span class="tok">of</span> <span class="tok">Australia</span> <span class="tok">is</span> <span class="tok is-hover">Canberra</span><span class="tok">.</span> <span class="tok">It</span><span class="tok">’s</span> <span class="tok">a</span> <span class="tok">planned</span> <span class="tok">city</span><span class="tok">,</span> <span class="tok">chosen</span> <span class="tok">in</span> <span class="tok">1</span><span class="tok">9</span><span class="tok">0</span><span class="tok">8</span> <span class="tok">as</span> <span class="tok">a</span> <span class="tok">compromise</span> <span class="tok">between</span> <span class="tok">Sydney</span> <span class="tok">and</span> <span class="tok">Melbourne</span><span class="tok">,</span> <span class="tok">the</span> <span class="tok">two</span> <span class="tok">largest</span> <span class="tok">cities</span><span class="tok">.</span> <span class="tok">Parliament</span> <span class="tok">moved</span> <span class="tok">there</span> <span class="tok">in</span> <span class="tok">1</span><span class="tok">9</span><span class="tok">2</span><span class="tok">7</span><span class="tok">.</span></p>
+          <div class="msg-meta"><span>43 tokens</span><span>0.6 s</span><span>healthy weights</span></div>
+        </article>
+      </div>
+
+      <div class="pending">
+        <p><strong>4 edits since this reply.</strong> Ask again to see what they change.</p>
+        <a class="btn btn-primary" href="compare.html">Ask again</a>
+        <label><input type="checkbox" checked> Re-read the whole chat with the edits</label>
+      </div>
+      <form class="composer" onsubmit="return false">
+        <label class="sr-only" for="ask">Message</label>
+        <textarea id="ask" rows="1" placeholder="Ask the model something"></textarea>
+        <button class="btn" type="submit">Send</button>
+      </form>
+    </section>
+
+    <!-- layer stack -->
+    <section aria-label="Layers">
+      <div class="pane-head">
+        <h2>Layers</h2>
+        <p class="meta">One strip per layer, one cell per token of the last reply. The stronger the cell, the harder that layer fired on that token. Open a strip to edit it.</p>
+      </div>
+      <div class="stack-wrap">
+        <div class="axis" aria-hidden="true">
+          <span class="axis-layer">Layer</span>
+          <span class="axis-track"><span class="axis-mark" data-for="stack-main">Canberra</span></span>
+          <span style="text-align:right">Peak</span><span>Edits</span>
+        </div>
+        <div class="strips" id="stack-main" data-run="healthy" data-col="5" data-href="layer.html"></div>
+      </div>
+      <div class="legend">
+        <div class="scale">
+          <span class="scale-title">Activity, how hard it fired</span>
+          <span class="scale-bar"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i></span>
+          <span class="scale-ends"><span>silent</span><span>strongest</span></span>
+        </div>
+        <div class="scale">
+          <span class="scale-title">Edits, what you changed</span>
+          <span class="scale-bar"><i class="edit-down-4"></i><i class="edit-down-3"></i><i class="edit-down-2"></i><i class="edit-down-1"></i><i class="none"></i><i class="edit-up-1"></i><i class="edit-up-2"></i><i class="edit-up-3"></i><i class="edit-up-4"></i></span>
+          <span class="scale-ends"><span>off</span><span>×1</span><span>×16</span></span>
+        </div>
+        <div class="scale">
+          <span class="scale-title">Layer types</span>
+          <span>Attention: layers 3, 7, 11, 15, 19, 23</span>
+          <span>DeltaNet: the other 18</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- edits -->
+    <aside class="rail" aria-label="Edits">
+      <div class="pane-head"><h2>Edits</h2><span class="count num">4</span></div>
+      <ol class="edit-list">
+        <li class="edit">
+          <i class="swatch swatch-lg edit-up-2"></i>
+          <span class="edit-target">L12 N3090</span>
+          <span class="edit-val">×4</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Boosted. Fired 3.48 on “Sydney”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L14 N2817</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 7.92 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-down-1"></i>
+          <span class="edit-target">L14 N938</span>
+          <span class="edit-val">×0.5</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 5.88 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L15 H5</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Attention head. Looked at “Australia”.</span>
+        </li>
+      </ol>
+      <div class="rail-foot">
+        <button class="btn" type="button">Back to healthy</button>
+        <p class="meta">Edits are written into the weights in memory. The GGUF file on disk is never changed, so undo restores the exact values.</p>
+      </div>
+    </aside>
+
+  </main>
+</div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

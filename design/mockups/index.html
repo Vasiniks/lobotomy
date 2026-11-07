@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lobotomy design board</title>
+<link rel="icon" href="../logo/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500;700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,560;0,720;1,400&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="app.css">
+<style>
+  body { min-height: 100vh; }
+  .board { max-width: 1240px; padding: var(--space-7) var(--space-6) var(--space-8); display: grid; gap: var(--space-8); }
+  .board section { display: grid; gap: var(--space-5); }
+  .board h2 { font-size: var(--text-xl); font-weight: var(--weight-bold); letter-spacing: var(--tracking-display); }
+  .board h3 { font-size: var(--text-md); font-weight: var(--weight-bold); }
+  .lede { max-width: 64ch; color: var(--ink-2); font-size: var(--text-lg); line-height: var(--leading-read); }
+  .thesis { font-size: var(--text-4xl); line-height: var(--leading-tight); letter-spacing: var(--tracking-display); font-weight: var(--weight-bold); max-width: 20ch; }
+  .hero { display: grid; gap: var(--space-5); }
+  .hero-scales { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-7); }
+  .big-bar { display: flex; gap: 2px; padding: 2px; background: var(--surface-well); border-radius: 3px; width: max-content; }
+  .big-bar i { width: 40px; height: 28px; border-radius: 2px; background: var(--act, var(--edit)); }
+  .big-bar i.none { background: var(--edit-none); }
+  .big-bar .swatch.edit-off { width: 40px; height: 28px; }
+  .big-bar .swatch.edit-off::before, .big-bar .swatch.edit-off::after { height: 12px; }
+  .big-bar .swatch.edit-off::before, .big-bar .swatch.edit-off::after { width: calc(100% - 6px); }
+  .big-bar .swatch.edit-off::before { left: 6px; }
+  .labels { display: flex; gap: 2px; padding: 0 2px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); }
+  .labels span { width: 40px; text-align: center; }
+
+  /* logo directions */
+  .directions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
+  .direction { display: grid; gap: var(--space-3); align-content: start; }
+  .direction header { display: grid; gap: var(--space-1); min-height: 7.5em; }
+  .direction header p { color: var(--ink-2); font-size: var(--text-sm); max-width: 44ch; }
+  .direction .verdict { color: var(--ink-1); }
+  .tile { background: var(--surface-ground); color: var(--ink-1); border-radius: var(--radius-panel); padding: var(--space-5); display: grid; gap: var(--space-4); justify-items: start; box-shadow: inset 0 0 0 1px var(--rule); }
+  .tile .lockup { height: 30px; }
+  .tile .wordmark { height: 26px; }
+  .tile .mark { height: 44px; }
+  .tile-row { display: flex; align-items: center; gap: var(--space-5); }
+  .files { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 2px var(--space-3); }
+  .files a { text-decoration: none; }
+  .files a:hover { color: var(--ink-1); text-decoration: underline; }
+  .favicons { display: flex; align-items: end; gap: var(--space-3); }
+  .recommended { box-shadow: inset 0 0 0 1px var(--ink-1); }
+
+  /* colour */
+  .scales { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+  .scale-card { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-5); border-radius: var(--radius-panel); background: var(--surface-ground); color: var(--ink-1); box-shadow: inset 0 0 0 1px var(--rule); }
+  .topbar .crumbs { gap: var(--space-4); }
+  .scale-card p { font-size: var(--text-sm); color: var(--ink-2); max-width: 56ch; }
+  .sw-row { display: flex; gap: 2px; padding: 2px; background: var(--surface-well); border-radius: 3px; width: max-content; }
+  .sw-row i { width: 30px; height: 22px; border-radius: 2px; background: var(--act, var(--edit)); }
+  .sw-row i.none { background: var(--edit-none); }
+  .sw-labels { display: flex; gap: 2px; padding: 0 2px; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-3); }
+  .sw-labels span { width: 30px; text-align: center; }
+  .cvd { display: grid; grid-template-columns: 92px auto; gap: 6px var(--space-3); align-items: center; font-size: var(--text-xs); color: var(--ink-3); }
+  .cvd .sw-row i { width: 22px; height: 18px; }
+  .protan { filter: url(#protan); } .deutan { filter: url(#deutan); } .tritan { filter: url(#tritan); }
+  .checks { display: grid; gap: var(--space-1); font-size: var(--text-sm); color: var(--ink-2); padding-left: 1.1em; list-style: disc; }
+  .surfaces { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .chip { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--ink-3); }
+  .chip i { width: 88px; height: 36px; border-radius: var(--radius-control); box-shadow: inset 0 0 0 1px var(--rule); }
+
+  /* type */
+  .type { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: var(--space-4) var(--space-5); align-items: baseline; }
+  .type dt { font-size: var(--text-xs); color: var(--ink-3); }
+  .type dd { margin: 0; }
+  .t-reply { font-size: var(--text-lg); line-height: var(--leading-read); max-width: 60ch; }
+  .t-ui { font-size: var(--text-md); }
+  .t-dense { font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+  .t-mono { font-family: var(--font-mono); font-size: var(--text-md); }
+  .t-tell { font-family: var(--font-mono); font-size: var(--text-2xl); letter-spacing: 0.04em; }
+
+  /* components */
+  .parts { display: flex; flex-wrap: wrap; gap: var(--space-6); align-items: flex-start; }
+  .part { display: grid; gap: var(--space-2); }
+  .part .meta { font-size: var(--text-xs); }
+  .cells { display: flex; gap: var(--space-4); }
+  .cellx { display: grid; gap: 6px; justify-items: center; font-size: var(--text-2xs); color: var(--ink-3); }
+  .zoom { width: 24px; height: 24px; border-radius: 2px; background: var(--act); position: relative; }
+  .zoom[class*="edit-"] { box-shadow: 0 0 0 2px var(--surface-well), 0 0 0 5px var(--edit); }
+  .zoom.edit-off::after { content: ""; position: absolute; left: -4px; right: -4px; top: 50%; height: 4px; margin-top: -2px; background: var(--surface-well); }
+  .zoom.is-selected { outline: 1px solid var(--select); outline-offset: 8px; }
+  .zoom-well { padding: var(--space-3); background: var(--surface-well); border-radius: 3px; display: flex; gap: var(--space-5); }
+
+  /* screens */
+  .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+  .screen { display: grid; gap: var(--space-2); text-decoration: none; }
+  .screen img { width: 100%; height: auto; display: block; border-radius: var(--radius-panel); box-shadow: 0 0 0 1px var(--rule); }
+  .screen:hover img { box-shadow: 0 0 0 1px var(--ink-1); }
+  .screen strong { font-weight: var(--weight-bold); }
+  .screen span { color: var(--ink-2); font-size: var(--text-sm); }
+
+  @media (max-width: 980px) {
+    .directions, .scales, .screens { grid-template-columns: minmax(0, 1fr); }
+    .direction header { min-height: 0; }
+  }
+  @media (max-width: 640px) {
+    .board { padding: var(--space-5) var(--space-4) var(--space-7); gap: var(--space-7); }
+    .thesis { font-size: var(--text-3xl); }
+    .big-bar i, .big-bar .swatch.edit-off { width: 26px; height: 22px; }
+    .labels span { width: 26px; }
+    .type { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+    .type dd { margin-bottom: var(--space-3); }
+    .sw-row i, .sw-labels span { width: 22px; }
+    .board, .scale-card, .tile { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Machado, Oliveira & Fernandes 2009, severity 1.0, applied in linear RGB -->
+  <filter id="protan" color-interpolation-filters="linearRGB"><feColorMatrix type="matrix" values="0.152286 1.052583 -0.204868 0 0  0.114503 0.786281 0.099216 0 0  -0.003882 -0.048116 1.051998 0 0  0 0 0 1 0"/></filter>
+  <filter id="deutan" color-interpolation-filters="linearRGB"><feColorMatrix type="matrix" values="0.367322 0.860646 -0.227968 0 0  0.280085 0.672501 0.047413 0 0  -0.011820 0.042940 0.968881 0 0  0 0 0 1 0"/></filter>
+  <filter id="tritan" color-interpolation-filters="linearRGB"><feColorMatrix type="matrix" values="1.255528 -0.076749 -0.178779 0 0  -0.078411 0.930809 0.147602 0 0  0.004733 0.691367 0.303900 0 0  0 0 0 1 0"/></filter>
+</svg>
+
+<header class="topbar">
+  <a class="brand" href="index.html" aria-label="lobotomy design board">
+    <img class="on-dark" src="../logo/a-severed/lockup-on-dark.svg" alt="lobotomy">
+    <img class="on-light" src="../logo/a-severed/lockup-on-light.svg" alt="lobotomy">
+  </a>
+  <nav class="crumbs" aria-label="Screens"><a href="main.html">Chat and layers</a><a href="token.html">Inspect a word</a><a href="layer.html">Layer 14</a><a href="compare.html">Ask again</a></nav>
+  <div class="topbar-end"><button class="btn btn-quiet" type="button" data-theme-toggle>Light theme</button></div>
+</header>
+
+<main class="board">
+
+  <section class="hero" aria-labelledby="thesis">
+    <p class="lede">The design board for lobotomy, a local tool for breaking a small language model on purpose and watching what changes. Three logo directions, the design language in <a href="../tokens.css">tokens.css</a>, and four screens built on it.</p>
+    <h1 id="thesis" class="thesis">Light shows what the model did. Colour shows what you did.</h1>
+    <div class="hero-scales">
+      <div class="scale">
+        <span class="scale-title">Activity: how hard a neuron, head or layer fired</span>
+        <span class="big-bar"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i></span>
+        <span class="labels"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></span>
+      </div>
+      <div class="scale">
+        <span class="scale-title">Edits: turned down or off, untouched, boosted</span>
+        <span class="big-bar"><i class="swatch edit-off"></i><i class="edit-down-3"></i><i class="edit-down-2"></i><i class="edit-down-1"></i><i class="none"></i><i class="edit-up-1"></i><i class="edit-up-2"></i><i class="edit-up-3"></i><i class="edit-up-4"></i></span>
+        <span class="labels"><span>off</span><span>×⅛</span><span>×¼</span><span>×½</span><span>×1</span><span>×2</span><span>×4</span><span>×8</span><span>×16</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="logos">
+    <h2 id="logos">Logo directions</h2>
+    <div class="directions">
+
+      <article class="direction">
+        <header>
+          <h3>A. Severed</h3>
+          <p>The name has three o’s. The second one, where lobo- (lobe) meets -tomy (cutting), is cut clean through and its top has slipped.</p>
+          <p class="verdict">Recommended. It comes from the name, not from a screen layout that may change, it reads at 16 px, and the same cut marks “off” inside the app.</p>
+        </header>
+        <div class="tile recommended" data-theme="dark">
+          <img class="lockup" src="../logo/a-severed/lockup-on-dark.svg" alt="lobotomy lockup on dark">
+          <div class="tile-row"><img class="mark" src="../logo/a-severed/mark-on-dark.svg" alt="mark on dark"><img class="wordmark" src="../logo/a-severed/wordmark-on-dark.svg" alt="wordmark on dark"></div>
+        </div>
+        <div class="tile" data-theme="light">
+          <img class="lockup" src="../logo/a-severed/lockup-on-light.svg" alt="lobotomy lockup on light">
+          <div class="tile-row"><img class="mark" src="../logo/a-severed/mark-on-light.svg" alt="mark on light"><img class="wordmark" src="../logo/a-severed/wordmark-on-light.svg" alt="wordmark on light"></div>
+        </div>
+        <div class="favicons" aria-label="Favicon at 16, 32 and 64 pixels">
+          <img src="../logo/favicon.svg" width="16" height="16" alt="">
+          <img src="../logo/favicon.svg" width="32" height="32" alt="">
+          <img src="../logo/favicon.svg" width="64" height="64" alt="favicon">
+          <span class="meta">favicon.svg, cut drawn heavier for 16 px</span>
+        </div>
+        <div class="files"><a href="../logo/a-severed/mark-on-dark.svg">mark</a><a href="../logo/a-severed/wordmark-on-dark.svg">wordmark</a><a href="../logo/a-severed/lockup-on-dark.svg">lockup</a><a href="../logo/favicon.svg">favicon</a></div>
+      </article>
+
+      <article class="direction">
+        <header>
+          <h3>B. Knockout</h3>
+          <p>A 3 × 3 crop of the neuron grid with one cell switched off. The monospaced wordmark switches off its t the same way.</p>
+          <p>The most literal. At small sizes it drifts toward a generic grid icon.</p>
+        </header>
+        <div class="tile" data-theme="dark">
+          <img class="lockup" src="../logo/b-knockout/lockup-on-dark.svg" alt="Knockout lockup on dark">
+          <div class="tile-row"><img class="mark" src="../logo/b-knockout/mark-on-dark.svg" alt="mark on dark"><img class="wordmark" src="../logo/b-knockout/wordmark-on-dark.svg" alt="wordmark on dark"></div>
+        </div>
+        <div class="tile" data-theme="light">
+          <img class="lockup" src="../logo/b-knockout/lockup-on-light.svg" alt="Knockout lockup on light">
+          <div class="tile-row"><img class="mark" src="../logo/b-knockout/mark-on-light.svg" alt="mark on light"><img class="wordmark" src="../logo/b-knockout/wordmark-on-light.svg" alt="wordmark on light"></div>
+        </div>
+        <div class="files"><a href="../logo/b-knockout/mark-on-dark.svg">mark</a><a href="../logo/b-knockout/wordmark-on-dark.svg">wordmark</a><a href="../logo/b-knockout/lockup-on-dark.svg">lockup</a></div>
+      </article>
+
+      <article class="direction">
+        <header>
+          <h3>C. Pulled</h3>
+          <p>Four layers stacked like a block tower, the third pulled half out. The wordmark is the interface face at its heaviest weight.</p>
+          <p>The funniest. It leans on the layer stack, which is still a proposal, and small it can pass for a text-alignment icon.</p>
+        </header>
+        <div class="tile" data-theme="dark">
+          <img class="lockup" src="../logo/c-pulled/lockup-on-dark.svg" alt="Pulled lockup on dark">
+          <div class="tile-row"><img class="mark" src="../logo/c-pulled/mark-on-dark.svg" alt="mark on dark"><img class="wordmark" src="../logo/c-pulled/wordmark-on-dark.svg" alt="wordmark on dark"></div>
+        </div>
+        <div class="tile" data-theme="light">
+          <img class="lockup" src="../logo/c-pulled/lockup-on-light.svg" alt="Pulled lockup on light">
+          <div class="tile-row"><img class="mark" src="../logo/c-pulled/mark-on-light.svg" alt="mark on light"><img class="wordmark" src="../logo/c-pulled/wordmark-on-light.svg" alt="wordmark on light"></div>
+        </div>
+        <div class="files"><a href="../logo/c-pulled/mark-on-dark.svg">mark</a><a href="../logo/c-pulled/wordmark-on-dark.svg">wordmark</a><a href="../logo/c-pulled/lockup-on-dark.svg">lockup</a></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section aria-labelledby="colour">
+    <h2 id="colour">Colour</h2>
+    <div class="scales">
+      <div class="scale-card" data-theme="dark">
+        <h3>Dark, the default</h3>
+        <p>Activity is light on a green-black ground, like a lit panel in a dim room. Silent neurons sink into the well, the few that fire hard glow.</p>
+        <div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i></div>
+        <div class="sw-row"><i class="edit-down-4"></i><i class="edit-down-3"></i><i class="edit-down-2"></i><i class="edit-down-1"></i><i class="none"></i><i class="edit-up-1"></i><i class="edit-up-2"></i><i class="edit-up-3"></i><i class="edit-up-4"></i></div>
+        <div class="cvd">
+          <span>Protanopia</span><div class="protan"><div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i><i class="none" style="opacity:0"></i><i class="edit-down-4"></i><i class="edit-down-2"></i><i class="edit-up-2"></i><i class="edit-up-4"></i></div></div>
+          <span>Deuteranopia</span><div class="deutan"><div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i><i class="none" style="opacity:0"></i><i class="edit-down-4"></i><i class="edit-down-2"></i><i class="edit-up-2"></i><i class="edit-up-4"></i></div></div>
+          <span>Tritanopia</span><div class="tritan"><div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i><i class="none" style="opacity:0"></i><i class="edit-down-4"></i><i class="edit-down-2"></i><i class="edit-up-2"></i><i class="edit-up-4"></i></div></div>
+        </div>
+      </div>
+      <div class="scale-card" data-theme="light">
+        <h3>Light, “ward”</h3>
+        <p>On pale institutional green, activity turns into ink density and the edit scale darkens with strength instead of brightening. Same steps, same meanings.</p>
+        <div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i></div>
+        <div class="sw-row"><i class="edit-down-4"></i><i class="edit-down-3"></i><i class="edit-down-2"></i><i class="edit-down-1"></i><i class="none"></i><i class="edit-up-1"></i><i class="edit-up-2"></i><i class="edit-up-3"></i><i class="edit-up-4"></i></div>
+        <div class="cvd">
+          <span>Protanopia</span><div class="protan"><div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i><i class="none" style="opacity:0"></i><i class="edit-down-4"></i><i class="edit-down-2"></i><i class="edit-up-2"></i><i class="edit-up-4"></i></div></div>
+          <span>Deuteranopia</span><div class="deutan"><div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i><i class="none" style="opacity:0"></i><i class="edit-down-4"></i><i class="edit-down-2"></i><i class="edit-up-2"></i><i class="edit-up-4"></i></div></div>
+          <span>Tritanopia</span><div class="tritan"><div class="sw-row"><i class="act-0"></i><i class="act-1"></i><i class="act-2"></i><i class="act-3"></i><i class="act-4"></i><i class="act-5"></i><i class="act-6"></i><i class="act-7"></i><i class="act-8"></i><i class="none" style="opacity:0"></i><i class="edit-down-4"></i><i class="edit-down-2"></i><i class="edit-up-2"></i><i class="edit-up-4"></i></div></div>
+        </div>
+      </div>
+    </div>
+    <ul class="checks">
+      <li>Text: every ink token is at least 5:1 (WCAG 2) on every surface, in both themes.</li>
+      <li>Activity: lightness rises strictly from step 0 to 8, and still does under all three colour-blindness simulations. Neighbouring steps differ by at least 6.8 ΔE (OKLab × 100).</li>
+      <li>Edits: every step is at least 3:1 against every surface. Turned down and boosted at the same strength differ by at least 18 ΔE under every simulation.</li>
+      <li>“Off” never relies on colour alone: it is always drawn with the cut. Scale values are always written next to their swatch.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="type">
+    <h2 id="type">Type</h2>
+    <dl class="type">
+      <dt>Model replies<br>Next, 17 / 1.62</dt>
+      <dd class="t-reply">The capital of Australia is Canberra. It’s a planned city, chosen in 1908 as a compromise between Sydney and Melbourne.</dd>
+      <dt>Interface<br>Next, 15 / 1.4</dt>
+      <dd class="t-ui"><strong>4 edits since this reply.</strong> Ask again to see what they change.</dd>
+      <dt>Dense data<br>Next, 13, tabular figures</dt>
+      <dd class="t-dense">Layer 14 &nbsp; DeltaNet &nbsp; peak 7.92 &nbsp; 49 neurons above 1.0</dd>
+      <dt>Exact strings<br>Mono, 15</dt>
+      <dd class="t-mono">␣Canberra &nbsp; L14 N2817 &nbsp; ×0.5 &nbsp; &lt;|im_start|&gt;</dd>
+      <dt>Why Atkinson Hyperlegible</dt>
+      <dd><span class="t-tell">Il1| 0O 5S rn</span><p class="meta">Neuron IDs and token strings have to be read exactly. This family was drawn so these never collide. Both faces are SIL OFL and can ship inside the offline app.</p></dd>
+    </dl>
+  </section>
+
+  <section aria-labelledby="parts">
+    <h2 id="parts">Parts</h2>
+    <div class="parts">
+      <div class="part">
+        <h3>A neuron, enlarged</h3>
+        <div class="zoom-well">
+          <div class="cellx"><i class="zoom act-0"></i>silent</div>
+          <div class="cellx"><i class="zoom act-4"></i>firing</div>
+          <div class="cellx"><i class="zoom act-8"></i>hottest</div>
+          <div class="cellx"><i class="zoom act-8 edit-off"></i>off</div>
+          <div class="cellx"><i class="zoom act-8 edit-down-1"></i>×0.5</div>
+          <div class="cellx"><i class="zoom act-5 edit-up-2"></i>×4</div>
+          <div class="cellx"><i class="zoom act-6 is-selected"></i>selected</div>
+        </div>
+        <p class="meta">Fill is the model. The ring is you. The cut means off.</p>
+      </div>
+      <div class="part">
+        <h3>Edit swatches</h3>
+        <div class="tile-row"><span class="edit-tag"><i class="swatch swatch-lg edit-off"></i>off</span><span class="edit-tag"><i class="swatch swatch-lg edit-down-1"></i>×0.5</span><span class="edit-tag"><i class="swatch swatch-lg edit-up-2"></i>×4</span></div>
+        <p class="meta">Value always printed in ink beside the swatch.</p>
+      </div>
+      <div class="part">
+        <h3>Buttons</h3>
+        <div class="tile-row"><button class="btn btn-primary" type="button">Ask again</button><button class="btn" type="button">Back to healthy</button><button class="btn btn-quiet" type="button">Undo</button></div>
+        <p class="meta">One primary button per screen, and it is always the next step.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="screens">
+    <h2 id="screens">Screens</h2>
+    <div class="screens">
+      <a class="screen" href="main.html"><img src="thumbs/main.png" alt="Chat and layer stack" width="720" height="450"><strong>Chat and layers</strong><span>The chat on the left, all 24 layers on the right, lit token by token by the last reply.</span></a>
+      <a class="screen" href="token.html"><img src="thumbs/token.png" alt="Inspecting the word Canberra" width="720" height="450"><strong>Inspect a word</strong><span>“Canberra” clicked: every layer on that word, the neurons that fired hardest, and where layer 15 looked.</span></a>
+      <a class="screen" href="layer.html"><img src="thumbs/layer.png" alt="Layer 14 opened" width="720" height="450"><strong>Layer 14, opened</strong><span>All 3,584 neurons as a 64 × 56 grid, the 16 heads, the strongest neurons, and the edit popover.</span></a>
+      <a class="screen" href="compare.html"><img src="thumbs/compare.png" alt="Healthy and edited answers side by side" width="720" height="450"><strong>Ask again</strong><span>The healthy and edited answers side by side, the split point, and the edits with their own undo.</span></a>
+    </div>
+  </section>
+
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

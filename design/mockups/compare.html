@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lobotomy: ask again</title>
+<link rel="icon" href="../logo/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500;700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,560;0,720;1,400&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="lobotomy: back to the design gallery">
+      <img class="on-dark" src="../logo/a-severed/lockup-on-dark.svg" alt="lobotomy">
+      <img class="on-light" src="../logo/a-severed/lockup-on-light.svg" alt="lobotomy">
+    </a>
+    <div class="model"><strong>Qwen3.5 0.8B</strong><span>Q4_K_M</span><span>MLX</span></div>
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="main.html">Chat</a><span aria-hidden="true">/</span><span aria-current="page">Ask again</span></nav>
+    <div class="topbar-end">
+      <div class="health" title="4 edits active">
+        <span class="swatches"><i class="swatch edit-up-2"></i><i class="swatch edit-off"></i><i class="swatch edit-down-1"></i><i class="swatch edit-off"></i></span>
+        4 edits
+      </div>
+      <button class="btn btn-quiet" type="button" data-theme-toggle>Light theme</button>
+    </div>
+  </header>
+
+  <main class="body is-compare">
+
+    <section class="compare" aria-labelledby="cmp-title">
+      <header class="compare-head">
+        <div>
+          <h1 id="cmp-title">What is the capital of Australia?</h1>
+          <p class="meta">Asked again with 4 edits. The whole chat was re-read with the edited weights.</p>
+        </div>
+        <a class="btn" href="main.html">Back to chat</a>
+      </header>
+
+      <div class="answers">
+        <article class="answer" aria-labelledby="a-healthy">
+          <div class="answer-head"><h2 id="a-healthy">Healthy</h2><span class="meta num">43 tokens</span></div>
+          <p class="msg-body">The capital of Australia is <span class="tok is-split">Canberra</span>. It’s a planned city, chosen in 1908 as a compromise between Sydney and Melbourne, the two largest cities. Parliament moved there in 1927.</p>
+          <div class="strips" id="stack-healthy" data-run="healthy" data-col="5" data-compact data-href="layer.html" aria-label="Healthy run, 24 layers"></div>
+        </article>
+
+        <article class="answer" aria-labelledby="a-edited">
+          <div class="answer-head">
+            <h2 id="a-edited">With 4 edits</h2>
+            <span class="swatches" style="display:flex;gap:3px"><i class="swatch edit-up-2"></i><i class="swatch edit-off"></i><i class="swatch edit-down-1"></i><i class="swatch edit-off"></i></span>
+            <span class="meta num">38 tokens</span>
+          </div>
+          <p class="msg-body">The capital of Australia is <span class="tok is-split">Sydney</span>. Sydney is the capital of Australia and the largest city in Australia. It is located on the east coast of Australia, and it is the capital of Australia.</p>
+          <div class="strips" id="stack-edited" data-run="edited" data-col="5" data-compact data-href="layer.html" aria-label="Edited run, 24 layers"></div>
+        </article>
+      </div>
+
+      <p class="split-note"><strong>The answers split at token 6.</strong> Before that, layers 0 to 11 match the healthy run exactly, because the first edit sits in layer 12. After it, layers 13 to 16 go quiet and the reply starts repeating “capital of Australia”.</p>
+    </section>
+
+    <!-- edits -->
+    <aside class="rail" aria-label="Edits">
+      <div class="pane-head"><h2>Edits</h2><span class="count num">4</span></div>
+      <ol class="edit-list">
+        <li class="edit">
+          <i class="swatch swatch-lg edit-up-2"></i>
+          <span class="edit-target">L12 N3090</span>
+          <span class="edit-val">×4</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Boosted. Fired 3.48 on “Sydney”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L14 N2817</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 7.92 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-down-1"></i>
+          <span class="edit-target">L14 N938</span>
+          <span class="edit-val">×0.5</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 5.88 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L15 H5</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Attention head. Looked at “Australia”.</span>
+        </li>
+      </ol>
+      <div class="rail-foot">
+        <p class="meta">Undo one edit, then ask again to see which one did the damage.</p>
+        <a class="btn btn-primary" href="compare.html">Ask again</a>
+        <button class="btn" type="button">Back to healthy</button>
+      </div>
+    </aside>
+
+  </main>
+</div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

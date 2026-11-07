@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lobotomy: inspect a word</title>
+<link rel="icon" href="../logo/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500;700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,560;0,720;1,400&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="lobotomy: back to the design gallery">
+      <img class="on-dark" src="../logo/a-severed/lockup-on-dark.svg" alt="lobotomy">
+      <img class="on-light" src="../logo/a-severed/lockup-on-light.svg" alt="lobotomy">
+    </a>
+    <div class="model"><strong>Qwen3.5 0.8B</strong><span>Q4_K_M</span><span>MLX</span></div>
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="main.html">Chat</a><span aria-hidden="true">/</span><span aria-current="page">“Canberra”</span></nav>
+    <div class="topbar-end">
+      <div class="health" title="4 edits active">
+        <span class="swatches"><i class="swatch edit-up-2"></i><i class="swatch edit-off"></i><i class="swatch edit-down-1"></i><i class="swatch edit-off"></i></span>
+        4 edits
+      </div>
+      <button class="btn btn-quiet" type="button" data-theme-toggle>Light theme</button>
+    </div>
+  </header>
+
+  <main class="body">
+
+    <!-- chat, with the clicked word selected -->
+    <section class="chat" aria-label="Chat">
+      <div class="transcript">
+        <article class="msg msg-user">
+          <div class="who">You</div>
+          <p class="msg-body">What is the capital of Australia?</p>
+        </article>
+        <article class="msg msg-model">
+          <div class="who">Model</div>
+          <p class="msg-body"><span class="tok">The</span> <span class="tok">capital</span> <span class="tok">of</span> <span class="tok">Australia</span> <span class="tok">is</span> <span class="tok is-selected" aria-current="true">Canberra</span><span class="tok">.</span> <span class="tok">It</span><span class="tok">’s</span> <span class="tok">a</span> <span class="tok">planned</span> <span class="tok">city</span><span class="tok">,</span> <span class="tok">chosen</span> <span class="tok">in</span> <span class="tok">1</span><span class="tok">9</span><span class="tok">0</span><span class="tok">8</span> <span class="tok">as</span> <span class="tok">a</span> <span class="tok">compromise</span> <span class="tok">between</span> <span class="tok">Sydney</span> <span class="tok">and</span> <span class="tok">Melbourne</span><span class="tok">,</span> <span class="tok">the</span> <span class="tok">two</span> <span class="tok">largest</span> <span class="tok">cities</span><span class="tok">.</span> <span class="tok">Parliament</span> <span class="tok">moved</span> <span class="tok">there</span> <span class="tok">in</span> <span class="tok">1</span><span class="tok">9</span><span class="tok">2</span><span class="tok">7</span><span class="tok">.</span></p>
+          <div class="msg-meta"><span>43 tokens</span><span>0.6 s</span><span>healthy weights</span></div>
+        </article>
+      </div>
+      <div class="pending">
+        <p><strong>4 edits since this reply.</strong> Ask again to see what they change.</p>
+        <a class="btn btn-primary" href="compare.html">Ask again</a>
+        <label><input type="checkbox" checked> Re-read the whole chat with the edits</label>
+      </div>
+      <form class="composer" onsubmit="return false">
+        <label class="sr-only" for="ask">Message</label>
+        <textarea id="ask" rows="1" placeholder="Ask the model something"></textarea>
+        <button class="btn" type="submit">Send</button>
+      </form>
+    </section>
+
+    <!-- the word -->
+    <section class="inspect" aria-labelledby="tok-title">
+      <header class="token-head">
+        <h1 id="tok-title" class="token-big"><span class="ws" aria-label="leading space">␣</span>Canberra</h1>
+        <p class="meta">Token 6 of 43, id 85215. The model picked it with probability 0.94; the runner-up was “Sydney” at 0.03.</p>
+      </header>
+
+      <div class="inspect-cols">
+        <div>
+          <h2 class="sub">Layers on this word <span class="meta">strength against each layer’s usual range, raw peak on the right</span></h2>
+          <div class="lbars" data-col="5"></div>
+        </div>
+
+        <div>
+          <h2 class="sub">Neurons that fired hardest <span class="meta">ranked against their layer</span></h2>
+          <table class="list">
+            <thead><tr><th>Neuron</th><th class="r">Value</th><th>Edit</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">L14 N2817</td><td class="r num">7.92<span class="bar act-8"><b style="width:100%"></b></span></td><td><span class="edit-tag"><i class="swatch edit-off"></i>off</span></td></tr>
+              <tr><td class="mono">L17 N411</td><td class="r num">6.40<span class="bar act-8"><b style="width:81%"></b></span></td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">L14 N938</td><td class="r num">5.88<span class="bar act-8"><b style="width:74%"></b></span></td><td><span class="edit-tag"><i class="swatch edit-down-1"></i>×0.5</span></td></tr>
+              <tr class="is-hover"><td class="mono">L19 N1873</td><td class="r num">5.10<span class="bar act-7"><b style="width:64%"></b></span></td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">L12 N1144</td><td class="r num">4.31<span class="bar act-6"><b style="width:54%"></b></span></td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">L16 N2290</td><td class="r num">4.02<span class="bar act-6"><b style="width:51%"></b></span></td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">L15 N3346</td><td class="r num">3.90<span class="bar act-6"><b style="width:49%"></b></span></td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+              <tr><td class="mono">L13 N605</td><td class="r num">−3.77<span class="bar act-5"><b style="width:48%"></b></span></td><td><span class="row-actions"><button class="btn btn-sm" type="button">Off</button></span></td></tr>
+            </tbody>
+          </table>
+
+          <h2 class="sub">Where layer 15 looked <span class="meta">attention, head 5, healthy run</span></h2>
+          <div class="heads is-8" data-layer="15" aria-label="8 attention heads in layer 15"></div>
+          <div class="attn">
+            <div class="attn-row"><span><span class="mono">Australia</span> <span class="where">in your question</span></span><span class="num r">0.41</span><span class="bar"><b style="width:41%"></b></span></div>
+            <div class="attn-row"><span><span class="mono">Australia</span> <span class="where">earlier in this reply</span></span><span class="num r">0.17</span><span class="bar"><b style="width:17%"></b></span></div>
+            <div class="attn-row"><span><span class="mono">capital</span> <span class="where">in your question</span></span><span class="num r">0.12</span><span class="bar"><b style="width:12%"></b></span></div>
+            <div class="attn-row"><span><span class="mono">&lt;|im_start|&gt;</span> <span class="where">start of chat</span></span><span class="num r">0.09</span><span class="bar"><b style="width:9%"></b></span></div>
+            <div class="attn-row"><span class="where">the other 31 tokens</span><span class="num r">0.21</span><span class="bar"><b style="width:21%"></b></span></div>
+          </div>
+          <p class="meta list-note">Only the six attention layers record where they looked. DeltaNet layers keep a running state instead, so they have no per-token pattern to show.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- edits -->
+    <aside class="rail" aria-label="Edits">
+      <div class="pane-head"><h2>Edits</h2><span class="count num">4</span></div>
+      <ol class="edit-list">
+        <li class="edit">
+          <i class="swatch swatch-lg edit-up-2"></i>
+          <span class="edit-target">L12 N3090</span>
+          <span class="edit-val">×4</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Boosted. Fired 3.48 on “Sydney”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L14 N2817</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 7.92 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-down-1"></i>
+          <span class="edit-target">L14 N938</span>
+          <span class="edit-val">×0.5</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Fired 5.88 on “Canberra”.</span>
+        </li>
+        <li class="edit">
+          <i class="swatch swatch-lg edit-off"></i>
+          <span class="edit-target">L15 H5</span>
+          <span class="edit-val">off</span>
+          <button class="btn btn-quiet btn-sm" type="button">Undo</button>
+          <span class="edit-why">Attention head. Looked at “Australia”.</span>
+        </li>
+      </ol>
+      <div class="rail-foot">
+        <button class="btn" type="button">Back to healthy</button>
+        <p class="meta">Edits are written into the weights in memory. The GGUF file on disk is never changed, so undo restores the exact values.</p>
+      </div>
+    </aside>
+
+  </main>
+</div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -313,13 +313,17 @@ def create_app(engine: Engine) -> FastAPI:
         grid = A.neuron_grid(r.recording, layer, sel, reduce=reduce)
         signed = A.signed_neuron_values(r.recording, layer, sel)
         act = A.layer_activity(r.recording, sel)[layer]
+        top = A.top_neurons(r.recording, layer, k=k, rows=sel, reduce=reduce)
         out = {
             "layer": layer,
             "type": eng.config.layer_type(layer),
             "n_heads": eng.config.n_layer_heads(layer),
             "grid": _rl(grid),
             "signed": _rl(signed),
-            "top": A.top_neurons(r.recording, layer, k=k, rows=sel, reduce=reduce),
+            "n_above": int((grid > 1.0).sum()),
+            "reference": _r(A.layer_reference(r.recording, layer)),
+            "peak": top[0] if top else None,
+            "top": top,
             "heads": _rl(act["heads"]),
             "mixer_out": _r(act["mixer_out"]),
             "mlp_out": _r(act["mlp_out"]),
@@ -348,25 +352,61 @@ def create_app(engine: Engine) -> FastAPI:
         toks = r.recorded_tokens(eng.tokenizer)
         lens = await api.run(eng.logit_lens, r, row, 3)
         heads = rec.heads[row]
+        all_ids = r.prompt_ids + r.token_ids
+        pos0 = int(rec.positions[0])
+        here = int(rec.positions[row])
+        im_start = eng.tokenizer.token_id("<|im_start|>")
+        header = max((i for i, t in enumerate(r.prompt_ids) if t == im_start), default=r.prompt_len)
+
+        def where(pos: int) -> str:
+            if pos == here:
+                return "this word"
+            if pos == 0:
+                return "start of chat"
+            if pos < r.record_start:
+                return "earlier in the chat"
+            if pos < header:
+                return "in your question"
+            if pos < r.prompt_len:
+                return "reply header"
+            return "earlier in this reply"
+
+        def entry(i: int, w: float) -> dict:
+            return {
+                "position": i,
+                "row": i - pos0 if i >= pos0 else None,
+                "text": eng.tokenizer.token_str(all_ids[i]),
+                "weight": _r(w),
+                "where": where(i),
+            }
+
         attention = {}
         for layer, probs in rec.attention.items():
             p = probs[row].astype(np.float32)  # (H, K)
+            per_head = []
+            for hp in p:
+                top = np.argsort(-hp)[:5]
+                items = [entry(int(i), float(hp[i])) for i in top if hp[i] > 0]
+                per_head.append({"top": items, "rest": _r(max(0.0, 1.0 - sum(x["weight"] for x in items)))})
             mean = p.mean(0)
-            top = np.argsort(-mean)[:6]
-            pos0 = int(rec.positions[0])
-            attention[str(layer)] = [
-                {
-                    "position": int(i),
-                    "row": int(i) - pos0 if int(i) >= pos0 else None,
-                    "text": eng.tokenizer.token_str((r.prompt_ids + r.token_ids)[int(i)]),
-                    "weight": _r(mean[i]),
-                }
-                for i in top
-                if mean[i] > 0
-            ]
+            top = np.argsort(-mean)[:5]
+            attention[str(layer)] = {
+                "heads": per_head,
+                "mean": {"top": [entry(int(i), float(mean[i])) for i in top if mean[i] > 0]},
+            }
+        prob = alternatives = None
+        if toks[row]["role"] == "reply":
+            i = toks[row]["position"] - r.prompt_len
+            prob = _r(r.token_probs[i])
+            alternatives = [{"text": eng.tokenizer.token_str(a), "prob": _r(p)} for a, p in r.alternatives[i]]
         return {
             "row": row,
             "token": toks[row],
+            "index_in_reply": toks[row]["position"] - r.prompt_len if toks[row]["role"] == "reply" else None,
+            "n_reply_tokens": len(r.token_ids),
+            "prob": prob,
+            "alternatives": alternatives,
+            "ranked": A.top_neurons_ranked(rec, row, k=12),
             "neurons": A.top_neurons_at(rec, row, k=k),
             "layer_mlp": _rl(np.abs(rec.mlp[row].astype(np.float32)).mean(-1)),
             "mlp_out": _rl(rec.mlp_out[row]),

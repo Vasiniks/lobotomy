@@ -67,6 +67,7 @@ def test_chat_edit_again_inspect(client):
 
     tok = client.get(f"/api/replies/{reply['id']}/token/{reply_rows[0]}").json()
     assert len(tok["lens"]) == 24 and set(tok["attention"]) == {"3", "7", "11", "15", "19", "23"}
+    assert len(tok["attention"]["3"]["heads"]) == 8 and tok["ranked"] and tok["alternatives"]
 
     dmg = client.get(f"/api/replies/{reply['id']}/damage").json()
     assert dmg["mean_kl"] > 0.01

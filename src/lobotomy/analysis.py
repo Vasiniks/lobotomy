@@ -56,13 +56,56 @@ def signed_neuron_values(rec: Recording, layer: int, rows=None) -> np.ndarray:
     return a.mean(axis=0) if a.shape[0] else np.zeros(rec.mlp.shape[-1], np.float32)
 
 
-def top_neurons(rec: Recording, layer: int, k: int = 20, rows=None, reduce: str = "mean") -> list[dict]:
-    grid = neuron_grid(rec, layer, rows, reduce)
-    signed = signed_neuron_values(rec, layer, rows)
+def top_neurons(rec: Recording, layer: int, k: int = 20, rows=None, reduce: str = "mean", above: float = 1.0) -> list[dict]:
+    """The k most active neurons. Each entry has ``activity`` (by ``reduce``),
+    ``mean_signed``, ``peak`` (the signed value with the largest size), ``peak_row``
+    (recording row where it peaked) and ``n_above`` (rows where |value| > above)."""
+    r = _rows(rec, rows)
+    a = rec.mlp[r, layer, :].astype(np.float32)  # (T, N)
+    if a.shape[0] == 0:
+        return []
+    absa = np.abs(a)
+    grid = absa.max(axis=0) if reduce == "max" else absa.mean(axis=0)
     k = min(k, grid.size)
     idx = np.argpartition(-grid, k - 1)[:k]
     idx = idx[np.argsort(-grid[idx])]
-    return [{"neuron": int(n), "activity": float(grid[n]), "mean_signed": float(signed[n])} for n in idx]
+    arg = absa[:, idx].argmax(axis=0)
+    out = []
+    for j, n in enumerate(idx):
+        t = int(arg[j])
+        out.append(
+            {
+                "neuron": int(n),
+                "activity": float(grid[n]),
+                "mean_signed": float(a[:, n].mean()),
+                "peak": float(a[t, n]),
+                "peak_row": int(r[t]),
+                "n_above": int((absa[:, n] > above).sum()),
+            }
+        )
+    return out
+
+
+def layer_reference(rec: Recording, layer: int, q: float = 99.9) -> float:
+    """A layer's usual range: a high percentile of |activation| over the recording."""
+    a = np.abs(rec.mlp[:, layer, :].astype(np.float32))
+    return float(np.percentile(a, q)) if a.size else 0.0
+
+
+def top_neurons_ranked(rec: Recording, row: int, k: int = 12) -> list[dict]:
+    """At one position, the neurons that fired hardest relative to their own layer's
+    usual range, across all layers."""
+    L = rec.mlp.shape[1]
+    vals = rec.mlp[row].astype(np.float32)  # (L, N)
+    refs = np.array([max(layer_reference(rec, i), 1e-6) for i in range(L)], np.float32)
+    rel = np.abs(vals) / refs[:, None]
+    flat = np.argpartition(-rel.ravel(), k - 1)[:k]
+    flat = flat[np.argsort(-rel.ravel()[flat])]
+    out = []
+    for f in flat:
+        layer, n = divmod(int(f), vals.shape[1])
+        out.append({"layer": layer, "neuron": n, "value": float(vals[layer, n]), "relative": float(rel[layer, n])})
+    return out
 
 
 def neuron_trace(rec: Recording, layer: int, neuron: int, rows=None) -> np.ndarray:
