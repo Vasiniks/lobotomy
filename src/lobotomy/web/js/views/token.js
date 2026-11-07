@@ -200,7 +200,7 @@ function renderInspect(el, d, detail, replyId) {
           {
             class: `lbar${m.layers[L].type === "attention" ? " is-attn" : ""}`,
             href: `#/layer/${L}`,
-            onclick: () => setLayerRow(d.row),
+            onclick: () => setLayerRow(replyId, d.row),
             title: `Open layer ${L} showing this word`,
           },
           h("span", { class: "strip-idx num" }, String(L)),
@@ -249,7 +249,7 @@ function renderInspect(el, d, detail, replyId) {
         const e = S.editFor(target);
         return h(
           "tr",
-          { onclick: (ev) => !ev.target.closest("button") && (setLayerRow(d.row), (location.hash = `#/layer/${x.layer}`)) },
+          { onclick: (ev) => !ev.target.closest("button") && (setLayerRow(replyId, d.row), (location.hash = `#/layer/${x.layer}`)) },
           h("td", { class: "mono" }, `L${x.layer} N${x.neuron}`),
           h(
             "td",

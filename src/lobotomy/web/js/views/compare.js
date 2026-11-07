@@ -98,7 +98,7 @@ export async function renderCompareView(body, exchangeId) {
       h(
         "div",
         { style: { display: "flex", gap: "8px" } },
-        !replies.some((r) => r.healthy || !r.edits.length)
+        ex === state.exchanges[state.exchanges.length - 1] && !replies.some((r) => r.healthy || !r.edits.length)
           ? h("button", { class: "btn", type: "button", disabled: state.busy, onclick: () => S.askAgain(true) }, "Ask the healthy model")
           : null,
         h("a", { class: "btn", href: "#/" }, "Back to chat"),

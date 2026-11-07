@@ -229,7 +229,8 @@ export function renderStrips(root, detail, opts = {}) {
   const rows = rowsOpt ?? (detail ? detail.tokens.filter((t) => t.role === "reply").map((t) => t.row) : []);
   const act = detail?.activity?.neuron_mean;
   const peaks = detail?.layers;
-  const maxCost = cost ? Math.max(...cost.map((c) => c.mean_kl), 1e-6) : 1;
+  const hasCost = Array.isArray(cost) && cost.length === nL;
+  const maxCost = hasCost ? Math.max(...cost.map((c) => c.mean_kl), 1e-6) : 1;
 
   for (let b = 0; b < nL / 4; b++) {
     const block = h("div", { class: "block" });
@@ -263,7 +264,7 @@ export function renderStrips(root, detail, opts = {}) {
           eds.slice(0, compact ? 2 : 3).map((e) => swatch(e)),
           eds.length > (compact ? 2 : 3) ? h("span", { class: "n" }, `+${eds.length - (compact ? 2 : 3)}`) : null,
         ),
-        cost && !compact
+        hasCost && !compact
           ? h(
               "span",
               { class: "strip-cost", title: `Cutting layer ${L} alone would change this reply by ${fmtCost(cost[L].mean_kl)} nats` },
@@ -433,6 +434,11 @@ export function openEditPopover(anchor, { target, title, sub, info, note, says, 
   place(pop, anchor);
   openPop = pop;
   slider.focus();
+  return pop;
+}
+
+export function isOpen(pop) {
+  return pop && openPop === pop && pop.isConnected;
 }
 
 export function sparkline(values) {
@@ -464,10 +470,17 @@ export function openSettings(anchor) {
     "form",
     {
       class: "menu",
+      novalidate: true,
       onsubmit: async (e) => {
         e.preventDefault();
         const patch = { enable_thinking: think.checked, system_prompt: sys.value, reread: reread.checked };
-        for (const inp of form.querySelectorAll("input[data-key]")) patch[inp.dataset.key] = Number(inp.value);
+        for (const inp of form.querySelectorAll("input[data-key]")) {
+          const v = Number(inp.value);
+          if (inp.value === "" || !Number.isFinite(v)) continue; // keep the old value
+          const lo = inp.min === "" ? -Infinity : Number(inp.min);
+          const hi = inp.max === "" ? Infinity : Number(inp.max);
+          patch[inp.dataset.key] = Math.min(hi, Math.max(lo, v));
+        }
         await S.saveSettings(patch);
         closePopover();
         S.toast("Settings saved");
@@ -477,7 +490,7 @@ export function openSettings(anchor) {
     num("temperature", "Temperature (0 = greedy)", { step: 0.05, min: 0, max: 2 }),
     num("top_p", "Top-p", { step: 0.05, min: 0, max: 1 }),
     num("top_k", "Top-k", { step: 1, min: 0 }),
-    num("max_tokens", "Max reply tokens", { step: 16, min: 1, max: 4096 }),
+    num("max_tokens", "Max reply tokens", { step: 1, min: 1, max: 4096 }),
     num("seed", "Seed", { step: 1, min: 0 }),
     num("presence_penalty", "Presence penalty", { step: 0.1, min: 0, max: 2 }),
     h("label", { class: "field check" }, think, "Let the model think first (<think>)"),

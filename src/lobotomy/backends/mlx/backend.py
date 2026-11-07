@@ -150,13 +150,16 @@ class MLXBackend(Backend):
         H = cfg.max_heads
         # Stack on the device first: a few large copies beat ~150 small ones.
         pad = lambda a: a if a.shape[-1] == H else mx.pad(a, [(0, 0)] * (a.ndim - 1) + [(0, H - a.shape[-1])], constant_values=mx.nan)
+        # float16 tops out at 65504; a boosted neuron can exceed it, so clip
+        # rather than let an inf reach the JSON API.
+        f16 = lambda a: mx.clip(a.astype(mx.float32), -65000.0, 65000.0).astype(mx.float16)
         dev = {
-            "mlp": mx.stack([a[0] for a in rec.mlp], axis=1).astype(mx.float16),  # (Tr, L, N)
+            "mlp": f16(mx.stack([a[0] for a in rec.mlp], axis=1)),  # (Tr, L, N)
             "heads": mx.stack([pad(a[0]) for a in rec.heads], axis=1),
             "scalars": mx.stack(
                 [mx.stack([a[0] for a in grp], axis=1) for grp in (rec.mixer_out, rec.mlp_out, rec.resid)]
             ),  # (3, Tr, L)
-            "resid_vec": mx.stack([a[0] for a in rec.resid_vec], axis=1),
+            "resid_vec": f16(mx.stack([a[0] for a in rec.resid_vec], axis=1)),
         }
         mx.eval(list(dev.values()))
         scalars = np.array(dev["scalars"])
@@ -281,6 +284,9 @@ class MLXBackend(Backend):
 
     def read_tensor(self, tensor):
         return np.array(self.model.w[tensor].astype(mx.float32))
+
+    def read_pristine(self, tensor):
+        return np.array(self._pristine.get(tensor, self.model.w[tensor]).astype(mx.float32))
 
     def set_tensor_ops(self, tensor: str, ops: list[SliceOp]) -> None:
         w = self.model.w

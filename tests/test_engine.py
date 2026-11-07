@@ -142,6 +142,35 @@ def test_keep_memory_old_turns_stay_healthy(fresh):
         fresh.reread = True
 
 
+def test_bad_edits_never_enter_the_stack(fresh):
+    import pytest
+
+    healthy = fresh.chat(Q)
+    good = fresh.add_edit(Target("layer", layer=0), value=0.0)
+    w = fresh.backend.read_tensor("model.layers.0.mlp.down_proj.weight")
+    bad = [
+        Target("weight", tensor="model.layers.3.self_attn.o_proj"),  # missing .weight
+        Target("weight", tensor="model.layers.0.input_layernorm.weight", cols=(0, 4)),  # 1-D tensor
+        Target("weight", tensor="model.layers.0.mlp.up_proj.weight", rows=(0, 99999)),
+    ]
+    for t in bad:
+        with pytest.raises(ValueError):
+            fresh.add_edit(t, value=0.0)
+    assert [e.id for e in fresh.edits] == [good.id]
+    assert np.array_equal(fresh.backend.read_tensor("model.layers.0.mlp.down_proj.weight"), w)
+    # a recipe with one bad edit changes nothing
+    recipe = [
+        {"target": {"kind": "neuron", "layer": 5, "index": 1}, "value": 0.0},
+        {"target": {"kind": "weight", "tensor": "nope.weight"}, "value": 0.0},
+    ]
+    with pytest.raises(ValueError):
+        fresh.load_edits(recipe)
+    assert [e.id for e in fresh.edits] == [good.id]
+    # healthy still works and restores the edit afterwards
+    assert fresh.ask_again(healthy=True).token_ids == healthy.token_ids
+    assert np.array_equal(fresh.backend.read_tensor("model.layers.0.mlp.down_proj.weight"), w)
+
+
 def test_recipe_roundtrip(fresh, tmp_path):
     fresh.chat(Q)
     fresh.add_edit(Target("head", layer=3, index=1), value=0.0)

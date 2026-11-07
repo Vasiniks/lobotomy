@@ -38,6 +38,25 @@ def _rl(arr, nd: int = 4) -> list:
     return [_r(v, nd) for v in np.asarray(arr, dtype=np.float64).ravel()]
 
 
+def _finite(obj):
+    """Replace NaN/inf (which JSON can't carry) with None, recursively. A badly
+    broken model can produce them."""
+    if isinstance(obj, float):
+        return obj if np.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _finite(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_finite(v) for v in obj]
+    if isinstance(obj, np.generic):
+        return _finite(obj.item())
+    return obj
+
+
+class SafeJSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return json.dumps(_finite(content), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
 class Api:
     def __init__(self, engine: Engine):
         self.eng = engine
@@ -117,13 +136,20 @@ class Api:
 
     @staticmethod
     def rows_for(r: Reply, rows: str | None, tokenizer) -> list[int] | None:
-        """rows: 'reply' (default), 'all', or comma-separated row indices."""
+        """rows: 'reply' (default), 'all', or comma-separated row indices.
+        None means every recorded row; an empty reply selects no rows."""
         if rows == "all" or r.recording is None:
             return None
+        n = r.recording.n_positions
         if rows in (None, "", "reply"):
-            sel = [t["row"] for t in r.recorded_tokens(tokenizer) if t["role"] == "reply"]
-            return sel or None
-        return [int(x) for x in rows.split(",") if x.strip()]
+            return [i for i in range(n) if int(r.recording.positions[i]) >= r.prompt_len]
+        try:
+            sel = [int(x) for x in rows.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(400, f"bad rows {rows!r}")
+        if any(not 0 <= i < n for i in sel):
+            raise HTTPException(400, f"rows must be in 0..{n - 1}")
+        return sel
 
     # --- streaming --------------------------------------------------------------
 
@@ -151,7 +177,7 @@ class Api:
                 ev = await q.get()
                 if ev is done:
                     return
-                yield json.dumps(ev) + "\n"
+                yield json.dumps(_finite(ev)) + "\n"
 
         return StreamingResponse(body(), media_type="application/x-ndjson")
 
@@ -166,7 +192,9 @@ def _sampling(eng: Engine, overrides: dict | None) -> SamplingParams | None:
 
 def create_app(engine: Engine) -> FastAPI:
     api = Api(engine)
-    app = FastAPI(title="lobotomy", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app = FastAPI(
+        title="lobotomy", docs_url="/api/docs", openapi_url="/api/openapi.json", default_response_class=SafeJSONResponse
+    )
     eng = engine
 
     # --- state & settings --------------------------------------------------------

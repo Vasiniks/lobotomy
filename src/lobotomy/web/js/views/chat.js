@@ -147,7 +147,7 @@ function modelMsg(ex, r, selected) {
             dataset: { row: t.row },
             title: t.prob != null ? `p = ${fmt(t.prob, 3)}` : null,
             onclick: () => (location.hash = `#/token/${r.id}/${t.row}`),
-            onmouseenter: () => hoverRow(t.row),
+            onmouseenter: () => r.id === S.lastReply()?.id && hoverRow(t.row),
             onmouseleave: () => hoverRow(null),
           },
           t.text,
@@ -206,7 +206,15 @@ export function renderStack(section) {
   clear(section);
   const last = S.lastReply();
   const detail = last ? state.details.get(last.id) : null;
-  const cost = last && showCost ? S.scanResult(last.id, "layers") : null;
+  let cost = last && showCost ? S.scanResult(last.id, "layers") : null;
+  if (cost && !cost.length) cost = null; // empty reply: nothing to measure
+  // Results are dropped when edits change or a new reply arrives; re-measure.
+  if (showCost && last && !cost && !state.busy && last.n_tokens > 0) {
+    S.scan(last.id, "layers").catch(() => {
+      showCost = false;
+      S.emit();
+    });
+  }
 
   const head = h(
     "div",
@@ -228,12 +236,9 @@ export function renderStack(section) {
               type: "button",
               "aria-pressed": String(showCost),
               title: "Cut each layer alone and measure how much this reply would change",
-              onclick: async () => {
+              disabled: !last.n_tokens,
+              onclick: () => {
                 showCost = !showCost;
-                if (showCost) {
-                  S.emit();
-                  await S.scan(last.id, "layers");
-                }
                 S.emit();
               },
             },
@@ -260,10 +265,12 @@ export function renderStack(section) {
   );
   section.append(head);
   if (!state.model) return;
-  if (!last && !state.busy) {
+  if (!last) {
     section.append(
       h("p", { class: "stack-empty" }, "The layers light up after the first reply. Each of the 24 strips shows how hard that layer fired on every word the model wrote."),
+      legend(),
     );
+    return;
   }
   section.append(wrap);
   renderStrips(strips, detail, { cost, col: state.hoverRow });

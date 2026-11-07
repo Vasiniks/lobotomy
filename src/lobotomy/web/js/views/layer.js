@@ -3,15 +3,17 @@
 import { api } from "../api.js";
 import * as S from "../store.js";
 import { state } from "../store.js";
-import { closePopover, openEditPopover, renderRail, renderStrips, swatch } from "../components.js";
+import { closePopover, isOpen, openEditPopover, renderRail, renderStrips, sparkline, swatch } from "../components.js";
 import { actBin, clear, editClass, editValueText, fmt, fmtCost, h, percentile, showToken } from "../util.js";
 
 const COLS = 64;
-let rowsMode = "reply"; // "reply" or a recording row (number) for one token
+// A word picked in the word view: { replyId, row }. Only used while it belongs
+// to the reply the layer view shows (the latest one).
+let selected = null;
 let costOn = false;
 
-export function setLayerRow(row) {
-  rowsMode = row === null || row === undefined ? "reply" : row;
+export function setLayerRow(replyId, row) {
+  selected = replyId === null || replyId === undefined ? null : { replyId, row };
 }
 
 export async function renderLayerView(body, layer) {
@@ -25,10 +27,25 @@ export async function renderLayerView(body, layer) {
     return;
   }
   const detail = await S.ensureDetail(last.id);
-  const rowsKey = rowsMode === "reply" ? "reply" : String(rowsMode);
+  const row =
+    selected && selected.replyId === last.id && selected.row >= 0 && selected.row < detail.tokens.length ? selected.row : null;
+  const rowsKey = row === null ? "reply" : String(row);
   const data = await S.layerData(last.id, layer, rowsKey);
-  // the route may have changed while we waited
-  if (state.route.view !== "layer" || state.route.layer !== layer) return;
+  // the route, the reply or the selection may have changed while we waited
+  if (state.route.view !== "layer" || state.route.layer !== layer || S.lastReply()?.id !== last.id) return;
+  const nowRow = selected && selected.replyId === last.id ? selected.row : null;
+  if (nowRow !== row) return; // a newer render is on its way
+
+  if (costOn && last.n_tokens > 0 && !state.busy) {
+    for (const kind of ["heads", "neurons"]) {
+      if (!S.scanResult(last.id, kind, layer)) {
+        S.scan(last.id, kind, layer).catch(() => {
+          costOn = false;
+          S.emit();
+        });
+      }
+    }
+  }
 
   const scroll = body.querySelector(".layer")?.scrollTop ?? 0;
   clear(body);
@@ -41,7 +58,7 @@ export async function renderLayerView(body, layer) {
   const rail = h("aside", { class: "rail", "aria-label": "Edits" });
   body.append(minimap, section, rail);
   renderRail(rail);
-  renderLayer(section, layer, last, detail, data);
+  renderLayer(section, layer, last, detail, data, row);
   section.scrollTop = scroll;
 }
 
@@ -49,11 +66,12 @@ function tokenText(detail, row) {
   return detail.tokens[row]?.text ?? "";
 }
 
-function renderLayer(section, layer, reply, detail, data) {
+function renderLayer(section, layer, reply, detail, data, row) {
   const attn = data.type === "attention";
   const nN = data.grid.length;
   const peak = data.peak;
-  const selectedTok = rowsMode === "reply" ? null : detail.tokens[rowsMode];
+  const rowsMode = row === null ? "reply" : row;
+  const selectedTok = row === null ? null : detail.tokens[row];
 
   const typeDesc = attn
     ? `Gated attention. ${nN.toLocaleString()} MLP neurons, ${data.n_heads} heads of ${256} dims (2 shared key/value heads).`
@@ -95,7 +113,7 @@ function renderLayer(section, layer, reply, detail, data) {
           ? h(
               "div",
               { class: "seg", role: "group", "aria-label": "Show activity for" },
-              h("button", { type: "button", "aria-pressed": "false", onclick: () => switchRows("reply", layer) }, "Whole reply"),
+              h("button", { type: "button", "aria-pressed": "false", onclick: () => switchRows(layer) }, "Whole reply"),
               h("button", { type: "button", "aria-pressed": "true" }, `“${showToken(selectedTok.text)}”`),
             )
           : null,
@@ -106,16 +124,13 @@ function renderLayer(section, layer, reply, detail, data) {
             type: "button",
             "aria-pressed": String(costOn),
             title: "Switch off each head and each of the strongest neurons alone, and measure how much the reply would change",
-            onclick: async (e) => {
+            disabled: !reply.n_tokens,
+            onclick: () => {
               costOn = !costOn;
-              if (costOn) {
-                e.currentTarget.textContent = "Measuring…";
-                await Promise.all([S.scan(reply.id, "heads", layer), S.scan(reply.id, "neurons", layer)]);
-              }
               S.emit();
             },
           },
-          costOn ? "Hide cut cost" : "What matters here?",
+          costOn ? (costN && costH ? "Hide cut cost" : "Measuring…") : "What matters here?",
         ),
         wholeBtn,
       ),
@@ -183,7 +198,7 @@ function renderLayer(section, layer, reply, detail, data) {
           type: "button",
           "data-pop-anchor": "",
           title: `Head ${i}: output size ${fmt(v, 3)}${c ? `; cut cost ${fmtCost(c.mean_kl)}` : ""}`,
-          onclick: (ev) => openHead(ev.currentTarget, layer, i, attn, v, reply),
+          onclick: (ev) => openHead(ev.currentTarget, layer, i, attn, v),
         },
         h("span", { class: `head act-${actBin(v, headRef)}${e ? ` ${editClass(e)}` : ""}` }, c ? (c.mean_kl >= 0.01 ? c.mean_kl.toFixed(2) : "0") : ""),
         h("span", { class: "head-idx num" }, String(i)),
@@ -319,8 +334,8 @@ function neuronNote(t, detail) {
   return t ? `Fired ${fmt(t.peak)} on “${showToken(tokenText(detail, t.peak_row))}”.` : "";
 }
 
-function switchRows(mode, layer) {
-  rowsMode = mode;
+function switchRows(layer) {
+  selected = null;
   closePopover();
   renderLayerView(document.getElementById("body"), layer);
 }
@@ -329,31 +344,29 @@ function openNeuron(anchor, layer, n, reply, detail, data, top) {
   const t = top ?? data.top.find((x) => x.neuron === n);
   const info = api.neuron(reply.id, layer, n);
   const note = t ? neuronNote(t, detail) : `Average ${fmt(data.grid[n], 3)} over the reply.`;
-  openEditPopover(anchor, {
+  const pop = openEditPopover(anchor, {
     target: { kind: "neuron", layer, index: n },
     title: `Neuron ${n}`,
     sub: `layer ${layer}`,
     info: t
       ? `Peak ${fmt(t.peak)} on “${showToken(tokenText(detail, t.peak_row))}”. Above 1.0 on ${t.n_above} of the recorded tokens.`
-      : `Average size ${fmt(data.grid[n], 3)} over the reply.`,
+      : `Strongest size ${fmt(data.grid[n], 3)} over the reply.`,
     note,
     says: info.then((x) => x.says),
     trace: null,
     sign: t ? Math.sign(t.peak) || 1 : Math.sign(data.signed[n]) || 1,
   });
-  // add the trace once it arrives
-  info.then((x) => {
-    const pop = document.querySelector(".popover");
-    if (!pop || !x.trace) return;
-    const rows = detail.tokens.filter((tk) => tk.role === "reply").map((tk) => tk.row);
-    import("../components.js").then(({ sparkline }) => {
-      const sp = sparkline(rows.map((r) => x.trace[r] ?? 0));
-      pop.querySelector(".popover-head").after(sp);
-    });
-  });
+  // add the trace to this popover once it arrives (if it's still open)
+  info
+    .then((x) => {
+      if (!isOpen(pop) || !x.trace) return;
+      const rows = detail.tokens.filter((tk) => tk.role === "reply").map((tk) => tk.row);
+      pop.querySelector(".popover-head").after(sparkline(rows.map((r) => x.trace[r] ?? 0)));
+    })
+    .catch(() => {});
 }
 
-function openHead(anchor, layer, i, attn, v, reply) {
+function openHead(anchor, layer, i, attn, v) {
   openEditPopover(anchor, {
     target: { kind: "head", layer, index: i },
     title: `Head ${i}`,

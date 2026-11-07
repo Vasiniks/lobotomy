@@ -144,6 +144,10 @@ class Backend(ABC):
     def read_tensor(self, tensor: str) -> np.ndarray:
         """Current (possibly edited) value as float32 numpy, for visualization."""
 
+    def read_pristine(self, tensor: str) -> np.ndarray:
+        """The unedited value. Backends that keep pristine copies should override."""
+        return self.read_tensor(tensor)
+
     # --- optional extras (the UI hides features a backend doesn't support) -------
 
     def snapshot_cache(self, cache: Any) -> Any:

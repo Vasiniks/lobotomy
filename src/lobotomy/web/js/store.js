@@ -78,6 +78,26 @@ export async function load() {
   if (last) await ensureDetail(last.id);
   emit();
   refreshDamage();
+  if (state.busy) pollWhileBusy();
+}
+
+// After a reload mid-generation there is no local stream to clear `busy`;
+// poll until the server is free, then pick up the new reply.
+async function pollWhileBusy() {
+  while (state.busy && !state.streaming) {
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      const s = await api.state();
+      state.busy = s.busy;
+      state.exchanges = s.exchanges;
+      state.edits = s.edits;
+    } catch {
+      return;
+    }
+  }
+  const last = lastReply();
+  if (last) await ensureDetail(last.id).catch(() => {});
+  emit();
 }
 
 export function lastReply() {
@@ -277,15 +297,31 @@ export const refreshDamage = debounce(async () => {
   }
 }, 350);
 
-export async function scan(replyId, kind, layer = null) {
+// Scans are deduplicated by key; results are dropped whenever edits change
+// (editsChanged clears state.scans), and views re-request what they need.
+const pendingScans = new Map();
+export function scan(replyId, kind, layer = null) {
   const key = `${replyId}:${kind}:${layer}`;
-  if (state.scans.has(key)) return state.scans.get(key);
+  if (state.scans.has(key)) return Promise.resolve(state.scans.get(key));
+  if (pendingScans.has(key)) return pendingScans.get(key);
   const params = { kind };
   if (layer !== null) params.layer = layer;
-  const res = await guard(api.scan(replyId, params));
-  state.scans.set(key, res.results);
-  emit();
-  return res.results;
+  const sig = editSignature(state.edits);
+  const p = api
+    .scan(replyId, params)
+    .then((res) => {
+      // ignore results computed under edits that have since changed
+      if (editSignature(state.edits) === sig) state.scans.set(key, res.results);
+      emit();
+      return res.results;
+    })
+    .catch((e) => {
+      toast(e.message, true);
+      throw e;
+    })
+    .finally(() => pendingScans.delete(key));
+  pendingScans.set(key, p);
+  return p;
 }
 
 export function scanResult(replyId, kind, layer = null) {

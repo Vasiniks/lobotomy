@@ -7,6 +7,7 @@ the one in Qwen3.5's official tokenizer.json; the GGUF records it only by name
 
 from __future__ import annotations
 
+import codecs
 import json
 from datetime import datetime
 
@@ -24,6 +25,22 @@ QWEN35_SPLIT = (
 
 # llama.cpp token types
 _NORMAL, _CONTROL, _USER_DEFINED = 1, 3, 4
+
+
+def _bytes_to_unicode() -> dict[int, str]:
+    """GPT-2's byte-level alphabet: every byte as a printable character."""
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(ord("¡"), ord("¬") + 1)) + list(range(ord("®"), ord("ÿ") + 1))
+    cs = bs[:]
+    n = 0
+    for b in range(256):
+        if b not in bs:
+            bs.append(b)
+            cs.append(256 + n)
+            n += 1
+    return dict(zip(bs, map(chr, cs)))
+
+
+_BYTE_DECODER = {c: b for b, c in _bytes_to_unicode().items()}
 
 
 class ChatTokenizer:
@@ -56,6 +73,7 @@ class ChatTokenizer:
                 raise RuntimeError(f"added token {t.content!r} got id {got}, expected {want}")
         self._tk = tk
         self.tokens = data.tokens
+        self._types = data.token_types
         self.eos_token_id = data.eos_token_id
         self.chat_template = data.chat_template
         self._template = _compile_template(data.chat_template) if data.chat_template else None
@@ -73,6 +91,23 @@ class ChatTokenizer:
     def token_str(self, token_id: int) -> str:
         """Readable text for a single token (byte-level pieces decoded)."""
         return self._tk.decode([token_id], skip_special_tokens=False)
+
+    def token_bytes(self, token_id: int) -> bytes:
+        s = self.tokens[token_id]
+        if self._types[token_id] == _NORMAL:
+            return bytes(_BYTE_DECODER.get(c, 0x3F) for c in s)
+        return s.encode("utf-8")
+
+    def pieces(self, ids: list[int]) -> list[str]:
+        """The text each token adds, decoded incrementally: a character split over
+        several byte-level tokens appears whole on its last token (earlier ones get
+        ""), so ``"".join(pieces(ids)) == decode(ids)``."""
+        dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        out = [dec.decode(self.token_bytes(t)) for t in ids]
+        tail = dec.decode(b"", final=True)
+        if tail and out:
+            out[-1] += tail
+        return out
 
     def token_id(self, text: str) -> int | None:
         return self._tk.token_to_id(text)

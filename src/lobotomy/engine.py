@@ -68,14 +68,19 @@ class Reply:
         out = []
         if self.recording is None:
             return out
-        for row, pos in enumerate(self.recording.positions.tolist()):
+        positions = self.recording.positions.tolist()
+        start = positions[0] if positions else 0
+        # decode from the start of the recording (a special token, so a character
+        # boundary) so characters split over several tokens come out whole
+        texts = tokenizer.pieces(all_ids[start : positions[-1] + 1]) if positions else []
+        for row, pos in enumerate(positions):
             tid = all_ids[pos]
             out.append(
                 {
                     "row": row,
                     "position": pos,
                     "token_id": tid,
-                    "text": tokenizer.token_str(tid),
+                    "text": texts[pos - start],
                     "role": "reply" if pos >= self.prompt_len else "prompt",
                 }
             )
@@ -116,6 +121,7 @@ class Engine:
         self._load_weights(g, name, dtype, use_cache, say)
         self.load_seconds = time.time() - t0
         self.edit_stack = EditStack(self.config)
+        self._shapes = {n: tuple(self.backend.tensor_shape(n)) for n in self.backend.tensor_names()}
         self.exchanges: list[Exchange] = []
         self.system_prompt = system_prompt
         self.sampling = SamplingParams()
@@ -168,7 +174,27 @@ class Engine:
     def _sync(self, tensors: set[str]) -> None:
         ops = self.edit_stack.ops_by_tensor()
         for t in sorted(tensors):
-            self.backend.set_tensor_ops(t, ops.get(t, []))
+            if t in self._shapes:  # a rejected edit may name a tensor that doesn't exist
+                self.backend.set_tensor_ops(t, ops.get(t, []))
+
+    def _check_ops(self, edit: Edit) -> None:
+        """Reject edits that name a missing tensor or fall outside its shape, before
+        they enter the stack (a bad edit must never be half-applied)."""
+        if edit.op not in ("scale", "noise"):
+            raise ValueError(f"op must be scale or noise, got {edit.op!r}")
+        if not np.isfinite(edit.value):
+            raise ValueError("edit value must be a finite number")
+        for o in resolve(edit, self.config):
+            shape = self._shapes.get(o.tensor)
+            if shape is None:
+                raise ValueError(f"no tensor named {o.tensor!r}")
+            if o.axis is None:
+                continue
+            if o.axis >= len(shape):
+                raise ValueError(f"{o.tensor} has {len(shape)} dims; can't edit axis {o.axis}")
+            for a, b in o.indices:
+                if not 0 <= a < b <= shape[o.axis]:
+                    raise ValueError(f"{o.tensor}: range {a}:{b} is outside 0:{shape[o.axis]}")
 
     def add_edit(
         self, target: Target | dict, op: str = "scale", value: float = 0.0, note: str = "", seed: int | None = None
@@ -177,13 +203,26 @@ class Engine:
             target = Target(**target)
         with self._lock:
             e = self.edit_stack.add(target, op=op, value=value, seed=seed, note=note)
-            self._sync(self.edit_stack.tensors_of([e]))
+            try:
+                self._check_ops(e)
+                self._sync(self.edit_stack.tensors_of([e]))
+            except Exception:
+                self.edit_stack.remove(e.id)
+                self._sync(self.edit_stack.tensors_of([e]))
+                raise
             return e
 
     def update_edit(self, edit_id: int, value: float | None = None, op: str | None = None) -> Edit:
         with self._lock:
+            old = self.edit_stack.get(edit_id)
             e = self.edit_stack.update(edit_id, value=value, op=op)
-            self._sync(self.edit_stack.tensors_of([e]))
+            try:
+                self._check_ops(e)
+                self._sync(self.edit_stack.tensors_of([e]))
+            except Exception:
+                self.edit_stack.update(edit_id, value=old.value, op=old.op)
+                self._sync(self.edit_stack.tensors_of([e]))
+                raise
             return e
 
     def undo(self, edit_id: int) -> Edit:
@@ -204,31 +243,43 @@ class Engine:
             return old
 
     def load_edits(self, edits: list[dict], replace_existing: bool = True) -> list[Edit]:
-        """Apply a saved recipe (a list of ``Edit.to_dict()`` dicts)."""
+        """Apply a saved recipe (a list of ``Edit.to_dict()`` dicts). All or nothing:
+        if any edit is invalid, the previous edits are restored."""
         with self._lock:
-            if replace_existing:
-                self.reset_edits()
-            out = []
-            for d in edits:
-                t = d["target"]
-                for k in ("rows", "cols"):
-                    if t.get(k) is not None:
-                        t[k] = tuple(t[k])
-                out.append(
-                    self.add_edit(
-                        Target(**t), op=d.get("op", "scale"), value=d.get("value", 0.0), note=d.get("note", ""), seed=d.get("seed")
+            before = list(self.edit_stack.edits)
+            try:
+                if replace_existing:
+                    self.reset_edits()
+                out = []
+                for d in edits:
+                    t = dict(d["target"])
+                    for k in ("rows", "cols"):
+                        if t.get(k) is not None:
+                            t[k] = tuple(t[k])
+                    out.append(
+                        self.add_edit(
+                            Target(**t),
+                            op=d.get("op", "scale"),
+                            value=d.get("value", 0.0),
+                            note=d.get("note", ""),
+                            seed=d.get("seed"),
+                        )
                     )
-                )
-            return out
+                return out
+            except Exception:
+                touched = self.edit_stack.tensors_of(self.edit_stack.edits) | self.edit_stack.tensors_of(before)
+                self.edit_stack.edits = before
+                self._sync(touched)
+                raise
 
     @contextlib.contextmanager
     def healthy(self):
         """Temporarily run the pristine model."""
         with self._lock:
             tensors = set(self.edit_stack.ops_by_tensor())
-            for t in tensors:
-                self.backend.set_tensor_ops(t, [])
             try:
+                for t in tensors:
+                    self.backend.set_tensor_ops(t, [])
                 yield
             finally:
                 self._sync(tensors)
@@ -263,7 +314,12 @@ class Engine:
         """Send a user message and stream the reply. See ``_generate`` for events."""
         ex = Exchange(id=self._next("exchange"), user=text)
         self.exchanges.append(ex)
-        yield from self._generate(ex, sampling, healthy=False)
+        try:
+            yield from self._generate(ex, sampling, healthy=False)
+        finally:
+            # a failed generation must not leave a dangling user turn
+            if not ex.replies and ex in self.exchanges:
+                self.exchanges.remove(ex)
 
     def stream_again(self, sampling: SamplingParams | None = None, healthy: bool = False) -> Iterator[dict]:
         """Answer the latest user message again with the current weights (or healthy ones)."""
@@ -272,7 +328,9 @@ class Engine:
         ex = self.exchanges[-1]
         prev = ex.replies[0] if ex.replies else None
         if sampling is None and prev is not None:
-            sampling = SamplingParams(**prev.sampling)  # same seed as the first answer
+            # current settings, but the first answer's seed, so a different
+            # answer comes from the weights rather than from sampling luck
+            sampling = replace(self.sampling, seed=prev.sampling["seed"])
         yield from self._generate(ex, sampling, healthy=healthy)
 
     def chat(self, text: str, sampling: SamplingParams | None = None, on_token=None) -> Reply:
@@ -560,8 +618,9 @@ class Engine:
 
     def neuron_vocab(self, layer: int, neuron: int, k: int = 10) -> dict:
         """Tokens a neuron pushes up and down when it fires positively (its down_proj
-        column read through the unembedding)."""
-        col = self.backend.read_tensor(f"model.layers.{layer}.mlp.down_proj.weight")[:, neuron]
+        column read through the unembedding). Uses the healthy weights, so a
+        switched-off MLP still shows what the neuron would say."""
+        col = self.backend.read_pristine(f"model.layers.{layer}.mlp.down_proj.weight")[:, neuron]
         ids_up, _ = self.backend.unembed_topk(col[None, :], k=k, apply_final_norm=True)
         ids_dn, _ = self.backend.unembed_topk(-col[None, :], k=k, apply_final_norm=True)
         tok = self.tokenizer

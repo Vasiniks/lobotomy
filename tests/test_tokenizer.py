@@ -19,6 +19,15 @@ def test_roundtrip(tokenizer):
 
 
 @needs_model
+def test_pieces_join_to_decode_and_keep_characters_whole(tokenizer):
+    for t in TEXTS:
+        ids = tokenizer.encode(t)
+        pieces = tokenizer.pieces(ids)
+        assert "".join(pieces) == tokenizer.decode(ids)
+        assert all("�" not in p for p in pieces)
+
+
+@needs_model
 def test_special_tokens_are_single_ids(tokenizer):
     for s in ("<|im_start|>", "<|im_end|>", "<think>", "</think>"):
         assert len(tokenizer.encode(s)) == 1

@@ -294,7 +294,7 @@ class Qwen35:
                 rec.mixer_out[i] = _norm(r[:, s:])
                 rec.mlp_out[i] = _norm(m[:, s:])
                 rec.resid[i] = _norm(h[:, s:])
-                rec.resid_vec[i] = h[:, s:].astype(mx.float16)
+                rec.resid_vec[i] = h[:, s:]  # converted (and clipped) to float16 by the backend
         return self._rms(h, "model.norm.weight")
 
     def logits(self, h: mx.array) -> mx.array:
