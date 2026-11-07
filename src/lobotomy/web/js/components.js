@@ -162,7 +162,25 @@ export function renderRail(el) {
             ),
           ),
         )
-      : h("p", { class: "rail-empty" }, "Nothing broken yet. Open a layer and switch something off."),
+      : h(
+          "div",
+          { class: "rail-empty" },
+          h("p", {}, "Nothing broken yet. Open a layer and switch something off, or start from a preset:"),
+          state.presets?.length
+            ? h(
+                "ul",
+                { class: "presets" },
+                state.presets.map((p) =>
+                  h(
+                    "li",
+                    {},
+                    h("button", { class: "btn btn-sm", type: "button", onclick: () => S.loadRecipe(p.edits, p.name) }, p.name),
+                    h("span", { class: "meta" }, p.description),
+                  ),
+                ),
+              )
+            : null,
+        ),
     h(
       "div",
       { class: "rail-foot" },

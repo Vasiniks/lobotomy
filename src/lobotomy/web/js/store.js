@@ -18,6 +18,7 @@ export const state = {
   scans: new Map(), // `${replyId}:${kind}:${layer}` -> results (for the current edits)
   damage: null, // { replyId, mean_kl, ... } for the latest reply under current edits
   hoverRow: null,
+  presets: [],
   route: { view: "chat" },
   error: null,
 };
@@ -62,6 +63,10 @@ async function guard(p) {
 // --- loading ----------------------------------------------------------------------
 
 export async function load() {
+  api.presets().then((p) => {
+    state.presets = p;
+    emit();
+  }).catch(() => {});
   const s = await guard(api.state());
   state.model = s.model;
   state.settings = s.settings;
@@ -240,10 +245,10 @@ export async function backToHealthy() {
   editsChanged();
 }
 
-export async function loadRecipe(edits) {
+export async function loadRecipe(edits, name = null) {
   state.edits = (await guard(api.loadEdits(edits))).edits;
   editsChanged();
-  toast(`Loaded ${state.edits.length} edits`);
+  toast(name ? `${name}: ${state.edits.length} edits. Ask again to see it.` : `Loaded ${state.edits.length} edits`);
 }
 
 export async function saveSettings(patch) {

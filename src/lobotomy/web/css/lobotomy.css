@@ -128,3 +128,8 @@
 .toast.is-error { border-left: 3px solid var(--status-rule); }
 
 .visually-hidden-file { display: none; }
+
+.presets { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+.presets li { display: grid; gap: var(--space-1); }
+.presets .btn { width: max-content; }
+.presets .meta { font-size: var(--text-xs); }

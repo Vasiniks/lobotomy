@@ -88,6 +88,15 @@ def test_bad_requests(client):
     assert client.post("/api/chat", json={"text": "  "}).status_code == 400
 
 
+def test_presets_load(client):
+    presets = client.get("/api/presets").json()
+    assert {p["id"] for p in presets} >= {"emoji-soup", "broken-record", "tipsy"}
+    for p in presets:
+        r = client.post("/api/edits/load", json={"edits": p["edits"]})
+        assert r.status_code == 200 and len(r.json()["edits"]) == len(p["edits"])
+    client.delete("/api/edits")
+
+
 def test_batch_and_recipe(client):
     body = {"edits": [{"target": {"kind": "neuron", "layer": 2, "index": i}, "value": 0} for i in range(5)]}
     r = client.post("/api/edits/batch", json=body).json()

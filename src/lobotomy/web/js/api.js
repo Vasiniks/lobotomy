@@ -68,6 +68,7 @@ export const api = {
   removeEdit: (id) => json("DELETE", `/api/edits/${id}`),
   resetEdits: () => json("DELETE", "/api/edits"),
   loadEdits: (edits) => json("POST", "/api/edits/load", { edits }),
+  presets: () => json("GET", "/api/presets"),
 
   reply: (id) => json("GET", `/api/replies/${id}`),
   layers: (id, rows) => json("GET", `/api/replies/${id}/layers${rows ? `?rows=${rows}` : ""}`),

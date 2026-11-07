@@ -286,6 +286,12 @@ def create_app(engine: Engine) -> FastAPI:
         await api.run(eng.reset_edits)
         return {"edits": []}
 
+    @app.get("/api/presets")
+    def list_presets():
+        from .presets import presets
+
+        return presets(eng.config)
+
     @app.post("/api/edits/load")
     async def load_edits(body: dict = Body(...)):
         try:
