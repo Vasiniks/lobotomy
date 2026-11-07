@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Download the default model: Unsloth's Qwen3.5 0.8B, Q4_K_M GGUF (~533 MB).
+# Download a Qwen3.5 GGUF from Unsloth into models/.
+#   scripts/download_model.sh                          # default: 0.8B Q4_K_M (~533 MB)
+#   scripts/download_model.sh Qwen3.5-2B-Q4_K_M.gguf   # the 2B (~1.3 GB)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p models
 FILE="${1:-Qwen3.5-0.8B-Q4_K_M.gguf}"
-URL="https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/${FILE}"
+# The repo is named after the model size: Qwen3.5-2B-Q4_K_M.gguf -> unsloth/Qwen3.5-2B-GGUF
+SIZE="$(printf '%s' "$FILE" | sed -E 's/^(Qwen3\.5-[0-9.]+B)-.*/\1/')"
+URL="https://huggingface.co/unsloth/${SIZE}-GGUF/resolve/main/${FILE}"
 if [ -f "models/${FILE}" ]; then
   echo "models/${FILE} already exists"
   exit 0

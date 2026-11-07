@@ -246,6 +246,15 @@ def _parse_gguf(path: Path) -> GGUFModel:
         name=str(_field(reader, "general.name", "qwen3.5")),
     )
 
+    if config.linear_n_v_heads != config.linear_n_k_heads:
+        # llama.cpp's converter reorders DeltaNet value heads from grouped to tiled
+        # order when there are more value heads than key heads (e.g. Qwen3.5 4B);
+        # undoing that isn't implemented or verified yet.
+        raise NotImplementedError(
+            f"{path.name}: DeltaNet layers with {config.linear_n_v_heads} value heads and "
+            f"{config.linear_n_k_heads} key heads aren't supported yet (Qwen3.5 0.8B and 2B are)."
+        )
+
     tok = TokenizerData(
         tokens=tokens,
         token_types=list(_field(reader, "tokenizer.ggml.token_type")),
