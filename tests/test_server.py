@@ -88,6 +88,29 @@ def test_bad_requests(client):
     assert client.post("/api/chat", json={"text": "  "}).status_code == 400
 
 
+def test_old_recordings_are_trimmed_but_still_summarised(client, fresh):
+    fresh.keep_recordings = 2
+    try:
+        fresh.sampling.max_tokens = 8
+        ids = [stream(client, "/api/chat", {"text": f"Say the number {i}."})[-1]["reply"]["id"] for i in range(3)]
+        old, newest = ids[0], ids[-1]
+        r_old = fresh.find_reply(old)
+        assert r_old.cache.get("trimmed") and r_old.recording.mlp is None
+        assert fresh.find_reply(newest).recording.mlp is not None
+        # chat and compare still work for the old answer
+        d = client.get(f"/api/replies/{old}").json()
+        assert len(d["activity"]["neuron_mean"]) == len(d["tokens"])
+        assert len(client.get(f"/api/replies/{old}/layers").json()["layers"]) == 24
+        # the deep views say why they can't
+        r = client.get(f"/api/replies/{old}/layer/3")
+        assert r.status_code == 410 and "memory" in r.json()["detail"]
+        assert client.get(f"/api/replies/{old}/token/0").status_code == 410
+        # attribution and damage only need the tokens
+        assert client.get(f"/api/replies/{old}/damage").status_code == 200
+    finally:
+        fresh.keep_recordings = 8
+
+
 def test_presets_load(client):
     presets = client.get("/api/presets").json()
     assert {p["id"] for p in presets} >= {"emoji-soup", "broken-record", "tipsy"}

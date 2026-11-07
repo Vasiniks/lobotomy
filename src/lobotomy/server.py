@@ -102,7 +102,7 @@ class Api:
             d["activity"] = {
                 "mlp_out": [_rl(row, 3) for row in rec.mlp_out],
                 "mixer_out": [_rl(row, 3) for row in rec.mixer_out],
-                "neuron_mean": [_rl(row, 4) for row in np.abs(rec.mlp.astype(np.float32)).mean(-1)],
+                "neuron_mean": [_rl(row, 4) for row in neuron_mean(r)],
             }
         return d
 
@@ -127,6 +127,18 @@ class Api:
             "system_prompt": e.system_prompt,
             "reread": e.reread,
         }
+
+    def full(self, reply_id: int) -> Reply:
+        """A reply that still has its full recording (older ones are trimmed)."""
+        r = self.find(reply_id)
+        if r.recording is None:
+            raise HTTPException(404, "no recording")
+        if r.cache.get("trimmed"):
+            raise HTTPException(
+                410,
+                f"this answer's full recording was dropped to save memory (only the {self.eng.keep_recordings} newest keep it)",
+            )
+        return r
 
     def find(self, reply_id: int) -> Reply:
         try:
@@ -180,6 +192,13 @@ class Api:
                 yield json.dumps(_finite(ev)) + "\n"
 
         return StreamingResponse(body(), media_type="application/x-ndjson")
+
+
+def neuron_mean(r: Reply) -> np.ndarray:
+    """(rows, layers) mean |activation|, cached on the reply (survives trimming)."""
+    if "neuron_mean" not in r.cache:
+        r.cache["neuron_mean"] = np.abs(r.recording.mlp.astype(np.float32)).mean(-1)
+    return r.cache["neuron_mean"]
 
 
 def _sampling(eng: Engine, overrides: dict | None) -> SamplingParams | None:
@@ -339,8 +358,14 @@ def create_app(engine: Engine) -> FastAPI:
         r = api.find(reply_id)
         if r.recording is None:
             raise HTTPException(404, "no recording")
-        sel = api.rows_for(r, rows, eng.tokenizer)
-        act = A.layer_activity(r.recording, sel)
+        if r.cache.get("trimmed"):
+            if rows not in (None, "", "reply"):
+                api.full(reply_id)  # raises 410
+            sel = None
+            act = [dict(a) for a in r.cache["layers:reply"]]
+        else:
+            sel = api.rows_for(r, rows, eng.tokenizer)
+            act = A.layer_activity(r.recording, sel)
         for a in act:
             a["type"] = eng.config.layer_type(a["layer"])
             a["heads"] = _rl(a["heads"])
@@ -348,7 +373,7 @@ def create_app(engine: Engine) -> FastAPI:
 
     @app.get("/api/replies/{reply_id}/layer/{layer}")
     def layer(reply_id: int, layer: int, rows: str | None = Query(None), k: int = 40, reduce: str = "mean"):
-        r = api.find(reply_id)
+        r = api.full(reply_id)
         if r.recording is None:
             raise HTTPException(404, "no recording")
         if not 0 <= layer < eng.config.n_layers:
@@ -379,7 +404,7 @@ def create_app(engine: Engine) -> FastAPI:
 
     @app.get("/api/replies/{reply_id}/neuron/{layer}/{neuron}")
     async def neuron(reply_id: int, layer: int, neuron: int):
-        r = api.find(reply_id)
+        r = api.full(reply_id)
         if r.recording is None:
             raise HTTPException(404, "no recording")
         trace = A.neuron_trace(r.recording, layer, neuron)
@@ -389,7 +414,7 @@ def create_app(engine: Engine) -> FastAPI:
 
     @app.get("/api/replies/{reply_id}/token/{row}")
     async def token(reply_id: int, row: int, k: int = 8):
-        r = api.find(reply_id)
+        r = api.full(reply_id)
         rec = r.recording
         if rec is None or not 0 <= row < rec.n_positions:
             raise HTTPException(404, "no such row")
@@ -484,7 +509,7 @@ def create_app(engine: Engine) -> FastAPI:
         rows: str | None = Query(None),
     ):
         """Ablation scan: the KL from the current model if each part were cut."""
-        r = api.find(reply_id)
+        r = api.full(reply_id) if kind == "neurons" else api.find(reply_id)
         candidates = None
         if kind in ("heads", "neurons") and (layer is None or not 0 <= layer < eng.config.n_layers):
             raise HTTPException(400, "this scan needs a layer")

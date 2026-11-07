@@ -143,6 +143,9 @@ class Engine:
         # False ("keep memory"): earlier turns stay as the model read them under
         # the weights of the time; only new tokens use the current weights.
         self.reread = True
+        # Full recordings (every neuron at every token) are ~100 MB per reply;
+        # older replies keep only the small summaries the chat and compare views need.
+        self.keep_recordings = 8
         self._mem: dict | None = None  # cache after the latest reply
         self._ask_snap: dict | None = None  # cache just before the latest prompt's last token
         self._lock = threading.RLock()
@@ -488,10 +491,26 @@ class Engine:
             },
         )
         ex.replies.append(reply)
+        self._trim_old_recordings()
         if can_snap:
             # every generated token was fed, so the cache holds prompt + reply
             self._mem = {"reply_id": reply.id, "tokens": prompt_ids + out_ids, "snap": be.snapshot_cache(cache)}
         yield {"type": "done", "reply": reply}
+
+    def _trim_old_recordings(self) -> None:
+        replies = sorted((r for ex in self.exchanges for r in ex.replies), key=lambda r: r.id)
+        for r in replies[: max(0, len(replies) - self.keep_recordings)]:
+            rec = r.recording
+            if rec is None or rec.mlp is None:
+                continue
+            from . import analysis as A
+
+            r.recorded_tokens(self.tokenizer)  # cache token texts
+            reply_rows = [i for i in range(rec.n_positions) if int(rec.positions[i]) >= r.prompt_len]
+            r.cache["neuron_mean"] = np.abs(rec.mlp.astype(np.float32)).mean(-1)
+            r.cache["layers:reply"] = A.layer_activity(rec, reply_rows)
+            r.recording = replace(rec, mlp=None, resid_vec=None, attention={})
+            r.cache["trimmed"] = True
 
     def reset_chat(self) -> None:
         with self._lock:
