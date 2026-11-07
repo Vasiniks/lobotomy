@@ -71,6 +71,10 @@ def test_chat_edit_again_inspect(client):
     dmg = client.get(f"/api/replies/{reply['id']}/damage").json()
     assert dmg["mean_kl"] > 0.01
 
+    scan = client.get(f"/api/replies/{reply['id']}/scan", params={"kind": "neurons", "layer": 11, "k": 4}).json()
+    assert len(scan["results"]) == 4
+    assert client.get(f"/api/replies/{reply['id']}/scan", params={"kind": "heads"}).status_code == 400
+
     assert client.delete(f"/api/edits/{edit_id}").json()["edits"] == []
     healthy_again = stream(client, "/api/again", {})[-1]["reply"]
     assert healthy_again["text"] == reply["text"]

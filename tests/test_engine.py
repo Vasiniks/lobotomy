@@ -107,6 +107,22 @@ def test_recipe_roundtrip(fresh, tmp_path):
     assert fresh.ask_again().token_ids == broken
 
 
+def test_scan_ranks_parts_and_restores_weights(fresh):
+    r = fresh.chat(Q)
+    fresh.add_edit(Target("neuron", layer=5, index=3), value=2.0)
+    before = {n: fresh.backend.read_tensor(n) for n in ("model.layers.5.mlp.up_proj.weight", "model.layers.0.mlp.down_proj.weight")}
+    layers = fresh.scan(r, "layers")
+    assert len(layers) == 24
+    assert max(layers, key=lambda x: x["mean_kl"])["mean_kl"] > 1.0  # some layer is critical
+    heads = fresh.scan(r, "heads", layer=3)
+    assert len(heads) == 8 and all(h["mean_kl"] >= 0 for h in heads)
+    neurons = fresh.scan(r, "neurons", layer=5, candidates=[3, 10, 20])
+    assert [n["target"]["index"] for n in neurons] == [3, 10, 20]
+    for n, w in before.items():
+        assert np.array_equal(fresh.backend.read_tensor(n), w)
+    assert len(fresh.edits) == 1
+
+
 def test_analysis_helpers(fresh):
     r = fresh.chat(Q)
     rows = [t["row"] for t in r.recorded_tokens(fresh.tokenizer) if t["role"] == "reply"]

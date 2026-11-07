@@ -157,6 +157,14 @@ class Backend(ABC):
         """
         raise NotImplementedError
 
+    def score_variants(self, token_ids, start, variants, current_ops) -> list[dict]:
+        """Ablation scan. For each variant ``{tensor: [SliceOp, ...]}`` (complete op
+        lists for those tensors), measure the KL from the current model on tokens
+        ``start..``. Restore every touched tensor to ``current_ops`` afterwards.
+        Returns ``[{"kl": (n,) array, "mean_kl": float, "top1_agree": float}]``.
+        """
+        raise NotImplementedError
+
     def damage_report(self, token_ids: list[int], start: int, healthy) -> dict[str, np.ndarray]:
         """Compare current weights with the healthy model on a fixed token sequence.
 

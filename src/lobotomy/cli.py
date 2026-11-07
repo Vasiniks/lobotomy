@@ -40,6 +40,7 @@ Type a message to chat. Commands:
     /damage                    how far the last reply's model is from healthy
 
   Looking inside (about the last reply)
+    /scan [layers | heads L | neurons L [K]]   what would cutting each part change?
     /layers                    activity per layer
     /top L [K]                 most active neurons in layer L
     /heads L                   head activity in layer L
@@ -153,6 +154,23 @@ class Repl:
             r = self.need_reply()
             d = eng.damage(r)
             self.out(f"mean KL from healthy: {d['mean_kl']:.3f} nats   per token: {A.sparkline(d['kl'], 60)}")
+        elif cmd == "scan":
+            r = self.need_reply()
+            what = args[0] if args else "layers"
+            if what == "layers":
+                res = eng.scan(r, "layers")
+            elif what == "heads":
+                res = eng.scan(r, "heads", layer=int(args[1]))
+            elif what == "neurons":
+                layer = int(args[1])
+                cands = [n["neuron"] for n in A.top_neurons(r.recording, layer, k=int(args[2]) if len(args) > 2 else 32, rows=self.reply_rows(r))]
+                res = eng.scan(r, "neurons", layer=layer, candidates=cands)
+            else:
+                raise ValueError("scan layers | heads L | neurons L [K]")
+            self.out("cutting each one alone would change this reply by (KL, nats):")
+            for x in sorted(res, key=lambda x: -x["mean_kl"])[:12]:
+                bar = "█" * int(min(40, x["mean_kl"] * 10))
+                self.out(f"  {x['label']:<22} {x['mean_kl']:7.3f}  top-1 kept {x['top1_agree']:.0%} {bar}")
         elif cmd == "layers":
             r = self.need_reply()
             act = A.layer_activity(r.recording, self.reply_rows(r))

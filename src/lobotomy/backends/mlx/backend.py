@@ -193,6 +193,30 @@ class MLXBackend(Backend):
         lg = self.model.logits(h).astype(mx.float32)
         return lg - mx.logsumexp(lg, axis=-1, keepdims=True)
 
+    def score_variants(self, token_ids, start, variants, current_ops):
+        """For each variant (a {tensor: ops} override), the KL from the current
+        model on the tokens ``start..`` of ``token_ids``. Weights are restored to
+        ``current_ops`` after each variant."""
+        pos = slice(start - 1, len(token_ids) - 1)
+        base = self.logprobs_for(token_ids, pos)
+        base_top = mx.argmax(base, axis=-1)
+        p_base = mx.exp(base)
+        mx.eval(base, base_top, p_base)
+        out = []
+        for v in variants:
+            try:
+                for t, ops in v.items():
+                    self.set_tensor_ops(t, ops)
+                lp = self.logprobs_for(token_ids, pos)
+                kl = mx.sum(p_base * (base - lp), axis=-1)
+                agree = mx.mean((mx.argmax(lp, axis=-1) == base_top).astype(mx.float32))
+                mx.eval(kl, agree)
+                out.append({"kl": np.array(kl), "mean_kl": float(kl.mean().item()), "top1_agree": float(agree.item())})
+            finally:
+                for t in v:
+                    self.set_tensor_ops(t, current_ops.get(t, []))
+        return out
+
     # --- weights -----------------------------------------------------------------
 
     def tensor_names(self):

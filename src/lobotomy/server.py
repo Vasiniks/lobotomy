@@ -389,6 +389,37 @@ def create_app(engine: Engine) -> FastAPI:
                 d[k] = _rl(d[k])
         return d
 
+    @app.get("/api/replies/{reply_id}/scan")
+    async def scan(
+        reply_id: int,
+        kind: str = "layers",
+        layer: int | None = None,
+        part: str = "all",
+        value: float = 0.0,
+        k: int = 32,
+        rows: str | None = Query(None),
+    ):
+        """Ablation scan: the KL from the current model if each part were cut."""
+        r = api.find(reply_id)
+        candidates = None
+        if kind in ("heads", "neurons") and (layer is None or not 0 <= layer < eng.config.n_layers):
+            raise HTTPException(400, "this scan needs a layer")
+        if kind == "neurons":
+            if r.recording is None:
+                raise HTTPException(404, "no recording")
+            sel = api.rows_for(r, rows, eng.tokenizer)
+            candidates = [n["neuron"] for n in A.top_neurons(r.recording, layer, k=k, rows=sel)]
+        try:
+            res = await api.run(eng.scan, r, kind=kind, layer=layer, candidates=candidates, value=value, part=part)
+        except NotImplementedError:
+            raise HTTPException(501, "this backend can't scan")
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        for x in res:
+            x["mean_kl"] = _r(x["mean_kl"])
+            x["top1_agree"] = _r(x["top1_agree"], 3)
+        return {"kind": kind, "layer": layer, "value": value, "results": res}
+
     @app.get("/api/neuron/{layer}/{neuron}/says")
     async def neuron_says(layer: int, neuron: int, k: int = 10):
         return await api.run(eng.neuron_vocab, layer, neuron, k)

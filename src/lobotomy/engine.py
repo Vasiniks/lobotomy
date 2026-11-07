@@ -21,7 +21,7 @@ from __future__ import annotations
 import contextlib
 import threading
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -29,7 +29,7 @@ import numpy as np
 
 from .backends import RecordSpec, Recording, default_backend, get_backend
 from .config import ModelConfig
-from .edits import Edit, EditStack, Target
+from .edits import Edit, EditStack, Target, resolve
 from .gguf_loader import open_gguf
 from .sampling import Sampler, SamplingParams
 from .tokenizer import ChatTokenizer
@@ -398,6 +398,53 @@ class Engine:
             "healthy_would_say": [tok.token_str(int(t)) for t in r["top_healthy"]],
             "current_would_say": [tok.token_str(int(t)) for t in r["top_current"]],
         }
+
+    def scan(
+        self,
+        reply: Reply,
+        kind: str = "layers",
+        layer: int | None = None,
+        candidates: list[int] | None = None,
+        value: float = 0.0,
+        part: str = "all",
+    ) -> list[dict]:
+        """Ablation scan: how much would this reply change if each part were cut?
+
+        ``kind``: "layers" (every layer, ``part`` = all/mixer/mlp), "heads" (every
+        head of ``layer``) or "neurons" (``candidates`` in ``layer``). Each part is
+        scaled by ``value`` on top of the current edits, one at a time, and scored
+        by the KL divergence from the current model over the reply's tokens.
+        Returns one entry per part, in scan order: ``{target, mean_kl, top1_agree}``.
+        """
+        cfg = self.config
+        if kind == "layers":
+            targets = [Target("layer", layer=i, part=part) for i in range(cfg.n_layers)]
+        elif kind == "heads":
+            targets = [Target("head", layer=layer, index=h) for h in range(cfg.n_layer_heads(layer))]
+        elif kind == "neurons":
+            if not candidates:
+                raise ValueError("neuron scan needs candidate neurons")
+            targets = [Target("neuron", layer=layer, index=n) for n in candidates]
+        else:
+            raise ValueError(f"unknown scan kind {kind!r}")
+        if not reply.token_ids:
+            return []
+        with self._lock:
+            current = self.edit_stack.ops_by_tensor()
+            variants = []
+            for t in targets:
+                extra = resolve(Edit(id=0, target=t, op="scale", value=value), cfg)
+                v: dict[str, list] = {}
+                for o in extra:
+                    v.setdefault(o.tensor, list(current.get(o.tensor, []))).append(o)
+                variants.append(v)
+            scores = self.backend.score_variants(
+                reply.prompt_ids + reply.token_ids, reply.prompt_len, variants, current
+            )
+        return [
+            {"target": asdict(t), "label": t.label(), "mean_kl": s["mean_kl"], "top1_agree": s["top1_agree"]}
+            for t, s in zip(targets, scores)
+        ]
 
     def logit_lens(self, reply: Reply, row: int, k: int = 5) -> list[list[tuple[str, float]]]:
         """For one recorded position: the top-k next tokens implied after each layer."""
