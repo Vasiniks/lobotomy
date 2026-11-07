@@ -8,3 +8,5 @@ models/
 .superpowers/
 .DS_Store
 .claude/
+.impeccable/hook.cache.json
+.impeccable/config.local.json

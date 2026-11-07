@@ -1,0 +1,19 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [
+      ".superpowers/**"
+    ],
+    "ignoreValues": [
+      {
+        "rule": "monotonous-spacing",
+        "value": "*",
+        "files": [
+          "design/mockups/index.html"
+        ],
+        "createdAt": "2026-11-07T20:14:05.077Z",
+        "reason": "design board uses an 8-step scale (4-64px); repeated 2px are swatch gaps in colour bars"
+      }
+    ]
+  }
+}
