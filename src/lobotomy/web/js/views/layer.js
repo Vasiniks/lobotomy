@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import * as S from "../store.js";
 import { state } from "../store.js";
-import { closePopover, layerTypeName, openEditPopover, renderRail, renderStrips, swatch } from "../components.js";
+import { closePopover, openEditPopover, renderRail, renderStrips, swatch } from "../components.js";
 import { actBin, clear, editClass, editValueText, fmt, fmtCost, h, percentile, showToken } from "../util.js";
 
 const COLS = 64;
@@ -50,12 +50,10 @@ function tokenText(detail, row) {
 }
 
 function renderLayer(section, layer, reply, detail, data) {
-  const m = state.model;
   const attn = data.type === "attention";
   const nN = data.grid.length;
   const peak = data.peak;
   const selectedTok = rowsMode === "reply" ? null : detail.tokens[rowsMode];
-  const lastTokRow = detail.tokens.filter((t) => t.role === "reply").map((t) => t.row);
 
   const typeDesc = attn
     ? `Gated attention. ${nN.toLocaleString()} MLP neurons, ${data.n_heads} heads of ${256} dims (2 shared key/value heads).`
@@ -64,7 +62,6 @@ function renderLayer(section, layer, reply, detail, data) {
   const costN = costOn ? S.scanResult(reply.id, "neurons", layer) : null;
   const costH = costOn ? S.scanResult(reply.id, "heads", layer) : null;
 
-  const layerTarget = (part) => ({ kind: "layer", layer, part });
   const wholeBtn = h(
     "button",
     {
@@ -293,7 +290,7 @@ function renderLayer(section, layer, reply, detail, data) {
           h("span", { class: "meta" }, `${COLS} × ${nRows}, one cell each, ${rowsMode === "reply" ? "strongest value over the reply" : "value on this word"}. ${data.n_above} fired above 1.0.`),
         ),
         gridFrame,
-        h("h2", { class: "sub" }, "Heads ", h("span", { class: "meta" }, costH ? "numbers are cut cost" : "output size over the reply")),
+        h("h2", { class: "sub" }, "Heads ", h("span", { class: "meta" }, costH ? "numbers are cut cost" : rowsMode === "reply" ? "output size over the reply" : "output size on this word")),
         heads,
       ),
       h(

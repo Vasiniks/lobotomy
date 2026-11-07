@@ -3,7 +3,7 @@
 import * as S from "../store.js";
 import { state } from "../store.js";
 import { renderRail, renderStrips, swatch } from "../components.js";
-import { clear, fmt, h } from "../util.js";
+import { clear, h } from "../util.js";
 
 const picks = new Map(); // exchangeId -> [leftReplyId, rightReplyId]
 

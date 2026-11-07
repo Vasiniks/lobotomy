@@ -79,6 +79,46 @@ recipes, and choosing cuts by activation similarity.
   separate mmproj file.
 - Repo: `unsloth/Qwen3.5-0.8B-GGUF` (Apache-2.0).
 
+## Built so far (2026-11-07)
+
+Everything under "Screen" above is built, plus the following:
+
+- **Damage meter:** KL divergence from the healthy model on the latest reply,
+  shown live in the top bar.
+- **What matters here?** An ablation scan. It cuts each layer, head or top
+  neuron alone and measures how much the reply would change.
+- **Why this word?** Gradient attribution over all 86k neurons and 336 heads
+  toward a chosen token, with "Make it stop saying it" (cut the top ten).
+- **Logit lens:** at every layer, for a clicked word.
+- **Neuron vocabulary:** the tokens a neuron's output pushes up or down.
+- **Keep-memory mode:** the "Re-read the whole chat" checkbox.
+- **Recipes:** save and load edits as JSON.
+- **Terminal interface:** `lobotomy chat`.
+
+## Decisions made while building (Claude's calls, open to change)
+
+- **Compute dtype is bfloat16.** It sits slightly closer to the reference than
+  float16 (KL 0.024 vs 0.028), and the bf16 weights are cached after the first
+  load.
+- **Neuron edits scale the neuron's row of `mlp.up_proj`.** The activation then
+  scales exactly by the factor, so recorded activations show the edit.
+- **Head edits scale the head's columns of the output projection.** The sigmoid
+  output gate can't reach zero, so it isn't a real off switch.
+- **"Layer off" scales the layer's output projections to 0.** The layer then
+  passes the residual stream through untouched.
+- **Edits on norm weights act on the gain (1 + w),** so "×0" silences a norm
+  rather than resetting it to a gain of 1.
+- **Ask again reuses the first answer's seed,** so differences come from the
+  edits.
+- **Re-read is the default.** Keep memory is opt-in.
+- **Activity colours are relative to each layer's own range** (the strips use
+  min to max over the reply), because absolute values differ about 10× between
+  early and late layers.
+- **Noise edits have no hue in the design.** They use the neutral edit colour
+  with a dashed ring.
+- **The theme follows the system setting** until toggled. The design opened
+  dark always.
+
 ## Non-goals for now
 
 - vision input
