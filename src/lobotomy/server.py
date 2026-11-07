@@ -450,7 +450,7 @@ def create_app(engine: Engine) -> FastAPI:
             if r.recording is None:
                 raise HTTPException(404, "no recording")
             sel = api.rows_for(r, rows, eng.tokenizer)
-            candidates = [n["neuron"] for n in A.top_neurons(r.recording, layer, k=k, rows=sel)]
+            candidates = [n["neuron"] for n in A.top_neurons(r.recording, layer, k=k, rows=sel, reduce="max")]
         try:
             res = await api.run(eng.scan, r, kind=kind, layer=layer, candidates=candidates, value=value, part=part)
         except NotImplementedError:

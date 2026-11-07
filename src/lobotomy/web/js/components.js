@@ -4,7 +4,7 @@
 import * as S from "./store.js";
 import { state } from "./store.js";
 import {
-  clear, editClass, editValueText, fmt, fmtScale, h, percentile, rangeBin, s, showToken, SLIDER, sliderToValue, valueToSlider,
+  clear, editClass, editValueText, fmt, fmtCost, fmtScale, h, percentile, rangeBin, s, showToken, SLIDER, sliderToValue, valueToSlider,
 } from "./util.js";
 
 // --- labels ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ export function renderTopbar(el, crumbs = []) {
       "div",
       { class: "damage", title: "How far the edited model's predictions are from the healthy model's, on the latest reply (mean KL divergence, nats)" },
       "Damage ",
-      h("b", {}, fmt(damage.mean_kl, 3)),
+      h("b", {}, fmtCost(damage.mean_kl)),
       h("span", { class: "meter" }, h("i", { style: { width: `${w}%` } })),
     );
   }
@@ -248,8 +248,8 @@ export function renderStrips(root, detail, opts = {}) {
         cost && !compact
           ? h(
               "span",
-              { class: "strip-cost", title: `Cutting layer ${L} alone would change this reply by ${fmt(cost[L].mean_kl, 3)} nats` },
-              fmt(cost[L].mean_kl, 2),
+              { class: "strip-cost", title: `Cutting layer ${L} alone would change this reply by ${fmtCost(cost[L].mean_kl)} nats` },
+              fmtCost(cost[L].mean_kl),
               h("span", { class: "bar" }, h("b", { style: { width: `${(cost[L].mean_kl / maxCost) * 100}%` } })),
             )
           : null,

@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import * as S from "../store.js";
 import { state } from "../store.js";
 import { closePopover, layerTypeName, openEditPopover, renderRail, renderStrips, swatch } from "../components.js";
-import { actBin, clear, editClass, editValueText, fmt, h, percentile, showToken } from "../util.js";
+import { actBin, clear, editClass, editValueText, fmt, fmtCost, h, percentile, showToken } from "../util.js";
 
 const COLS = 64;
 let rowsMode = "reply"; // "reply" or a recording row (number) for one token
@@ -185,10 +185,10 @@ function renderLayer(section, layer, reply, detail, data) {
           class: "head-cell",
           type: "button",
           "data-pop-anchor": "",
-          title: `Head ${i}: output size ${fmt(v, 3)}${c ? `; cut cost ${fmt(c.mean_kl, 3)}` : ""}`,
+          title: `Head ${i}: output size ${fmt(v, 3)}${c ? `; cut cost ${fmtCost(c.mean_kl)}` : ""}`,
           onclick: (ev) => openHead(ev.currentTarget, layer, i, attn, v, reply),
         },
-        h("span", { class: `head act-${actBin(v, headRef)}${e ? ` ${editClass(e)}` : ""}` }, c ? fmt(c.mean_kl, 2) : ""),
+        h("span", { class: `head act-${actBin(v, headRef)}${e ? ` ${editClass(e)}` : ""}` }, c ? (c.mean_kl >= 0.01 ? c.mean_kl.toFixed(2) : "0") : ""),
         h("span", { class: "head-idx num" }, String(i)),
       );
     }),
@@ -237,7 +237,7 @@ function renderLayer(section, layer, reply, detail, data) {
             h("span", { class: `bar act-${actBin(Math.abs(t.peak), maxPeak)}` }, h("b", { style: { width: `${(Math.abs(t.peak) / maxPeak) * 100}%` } })),
           ),
           h("td", { class: "mono" }, showToken(tokenText(detail, t.peak_row))),
-          costN ? h("td", { class: "cost" }, c ? fmt(c.mean_kl, 3) : "") : null,
+          costN ? h("td", { class: "cost" }, c ? fmtCost(c.mean_kl) : "") : null,
           h(
             "td",
             {},

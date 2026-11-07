@@ -8,10 +8,10 @@ heads or whole layers off (or turn them down, boost them, add noise), then ask
 again and see what changed. Every edit can be undone exactly.
 
 The default model is **Qwen3.5 0.8B** (Unsloth's Q4_K_M GGUF). It runs locally
-on Apple Silicon through MLX. A CUDA backend has a slot but isn't written yet.
+on Apple Silicon through MLX, at about 50 tokens/s on an M2 Pro with every
+neuron recorded. A CUDA backend has a slot but isn't written yet.
 
-> Status: the engine and the terminal interface work. The web UI is in progress.
-> See [docs/design.md](docs/design.md).
+![Layer 18 opened up: the neuron grid, the strongest neurons and the edit popover](docs/screenshots/layer.png)
 
 ## Quick start (Apple Silicon)
 
@@ -19,6 +19,40 @@ on Apple Silicon through MLX. A CUDA backend has a slot but isn't written yet.
 uv venv --python 3.13 .venv
 uv pip install --python .venv/bin/python -e ".[mlx,dev]"
 scripts/download_model.sh            # ~533 MB into models/
+.venv/bin/lobotomy serve             # then open http://127.0.0.1:7860
+```
+
+The first start dequantizes the GGUF and caches the result in `models/.cache/`
+(about 20 s); later starts take about 2 s.
+
+## The web UI
+
+- **Chat.** Replies stream in; every word is clickable. Next to the chat, the
+  layer stack shows one strip per layer and one cell per word, lit by how hard
+  that layer fired. **What matters here?** cuts each layer alone and shows how
+  much the answer would change.
+- **Layer.** All 3,584 MLP neurons as a 64 × 56 grid, the heads, and the
+  strongest neurons with the word each peaked on. Click anything to edit it:
+  off, a log slider from ×1/16 to ×16, boost, noise, reset. The popover shows
+  the neuron's activity across the reply and which tokens it pushes up or down.
+- **Word.** Click a word to see which layers and neurons fired on it, where each
+  attention head looked, the candidates the model considered, and the logit
+  lens (what each layer would have said next).
+- **Compare.** Ask again and the answers sit side by side, with the token where
+  they split marked. Ask again reuses the seed, so differences come from your
+  edits.
+- **Edits rail.** Every edit with a note on why you made it, undo, back to
+  healthy, and save or load recipes as JSON. The damage meter in the top bar
+  shows how far the edited model is from the healthy one (KL divergence on the
+  latest reply), live while you edit.
+
+![The chat with the layer stack](docs/screenshots/chat.png)
+
+The visual design (tokens, logos, mockups) is in [design/](design/DESIGN.md).
+
+## The terminal interface
+
+```bash
 .venv/bin/lobotomy chat
 ```
 
@@ -39,8 +73,8 @@ The capital of France is Paris.
 ```
 
 Type `/help` for every command: `/neuron`, `/head`, `/layer`, `/noise`, `/token`,
-`/topoff`, `/again`, `/healthy`, `/damage`, `/layers`, `/top`, `/lens`, `/says`,
-and saving or loading edit recipes.
+`/topoff`, `/again`, `/healthy`, `/damage`, `/scan`, `/layers`, `/top`, `/lens`,
+`/says`, and saving or loading edit recipes.
 
 ## What you can break
 
@@ -85,6 +119,8 @@ src/lobotomy/
     mlx/            Apple Silicon (done)
     cuda/           NVIDIA (stub)
   cli.py            terminal interface
+  server.py         local JSON API + streamed chat for the web UI
+  web/              the web UI (plain ES modules, no build step)
 tests/              pytest; test_backend_contract.py runs against any backend
 ```
 

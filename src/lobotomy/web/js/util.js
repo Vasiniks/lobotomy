@@ -38,6 +38,13 @@ export function fmt(x, digits = 2) {
   return x.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : digits);
 }
 
+// KL costs: fixed decimals, never scientific notation.
+export function fmtCost(x) {
+  if (x === null || x === undefined || Number.isNaN(x)) return "–";
+  if (x < 0.001) return "<0.001";
+  return x < 1 ? x.toFixed(3) : x.toFixed(2);
+}
+
 export function pct(x) {
   return `${Math.round(x * 100)}%`;
 }
