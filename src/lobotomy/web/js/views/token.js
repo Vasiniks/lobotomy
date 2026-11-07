@@ -9,8 +9,130 @@ import { setLayerRow } from "./layer.js";
 import { actBin, clear, editValueText, fmt, h, showToken } from "../util.js";
 
 const cache = new Map();
+const whyCache = new Map(); // `${reply}:${row}:${edit signature}` -> Promise
 let attnLayer = null;
 let attnHead = null;
+
+function whyKey(replyId, row) {
+  return `${replyId}:${row}:${S.editSignature(state.edits)}`;
+}
+
+// "Why this word?": gradient attribution over every neuron and head.
+function renderWhy(replyId, d) {
+  const text = d.token.text;
+  const box = h("div", { class: "why" });
+  const key = whyKey(replyId, d.row);
+  const head = h(
+    "h2",
+    { class: "sub" },
+    "Why this word? ",
+    h("span", { class: "meta" }, "which neurons and heads pushed the model toward it, from one gradient pass. Estimates, not measurements."),
+  );
+  box.append(head);
+  const p = whyCache.get(key);
+  if (!p) {
+    box.append(
+      h(
+        "button",
+        {
+          class: "btn",
+          type: "button",
+          disabled: state.busy || d.token.position < 1,
+          onclick: (e) => {
+            e.currentTarget.textContent = "Working…";
+            e.currentTarget.disabled = true;
+            whyCache.set(key, api.why(replyId, d.row));
+            whyCache.get(key).then(() => S.emit(), (err) => {
+              whyCache.delete(key);
+              S.toast(err.message, true);
+            });
+          },
+        },
+        "Find what pushed it here",
+      ),
+    );
+    return box;
+  }
+  const slot = h("div", {}, h("p", { class: "meta" }, "Working…"));
+  box.append(slot);
+  p.then((w) => {
+    clear(slot);
+    const max = Math.max(...w.support.map((u) => -u.effect), 1e-6);
+    const unitTarget = (u) => ({ kind: u.kind, layer: u.layer, index: u.index });
+    const rows = w.support.slice(0, 10).map((u) => {
+      const e = S.editFor(unitTarget(u));
+      const est = Math.exp(w.logp + u.effect);
+      return h(
+        "tr",
+        {},
+        h("td", { class: "mono" }, u.label),
+        h("td", {}, u.kind === "neuron" ? "neuron" : `${layerTypeName(u.layer) === "Attention" ? "attention" : "DeltaNet"} head`),
+        h(
+          "td",
+          { class: "r num", title: `If cut alone: p ≈ ${fmt(w.prob, 2)} → ${fmt(est, 2)} (first-order estimate)` },
+          fmt(u.effect, 2),
+          h("span", { class: "bar act-6" }, h("b", { style: { width: `${(-u.effect / max) * 100}%` } })),
+        ),
+        h(
+          "td",
+          {},
+          e
+            ? h("span", { class: "edit-tag" }, swatch(e), editValueText(e))
+            : h(
+                "span",
+                { class: "row-actions", style: { opacity: 1 } },
+                h(
+                  "button",
+                  {
+                    class: "btn btn-sm",
+                    type: "button",
+                    onclick: () => S.setScale(unitTarget(u), 0, `Pushed toward “${showToken(text)}” (est. ${fmt(u.effect, 2)}).`),
+                  },
+                  "Off",
+                ),
+              ),
+        ),
+      );
+    });
+    const fresh = w.support.slice(0, 10).filter((u) => !S.editFor(unitTarget(u)));
+    slot.append(
+      h(
+        "p",
+        { class: "meta" },
+        `The model gave “${showToken(text)}” probability ${fmt(w.prob, 2)}. Effect = estimated change in log-probability if that unit alone were switched off.`,
+      ),
+      h(
+        "table",
+        { class: "list" },
+        h("thead", {}, h("tr", {}, h("th", {}, "Unit"), h("th", {}, "Kind"), h("th", { class: "r" }, "Effect if cut"), h("th", {}, "Edit"))),
+        h("tbody", {}, rows),
+      ),
+      h(
+        "div",
+        { class: "why-actions" },
+        fresh.length
+          ? h(
+              "button",
+              {
+                class: "btn",
+                type: "button",
+                onclick: () =>
+                  S.addMany(
+                    fresh.map((u) => ({
+                      target: unitTarget(u),
+                      value: 0,
+                      note: `Pushed toward “${showToken(text)}” (est. ${fmt(u.effect, 2)}).`,
+                    })),
+                  ).then(() => S.toast("Switched off. Ask again to see if it still says it.")),
+              },
+              `Make it stop saying “${text.trim() || showToken(text)}”`,
+            )
+          : h("p", { class: "meta" }, "All ten are already edited. Ask again to see the effect."),
+      ),
+    );
+  });
+  return box;
+}
 
 export async function renderTokenView(body, replyId, row) {
   body.className = "body";
@@ -211,6 +333,7 @@ function renderInspect(el, d, detail, replyId) {
           )
         : null,
     ),
+    renderWhy(replyId, d),
     h(
       "div",
       { class: "inspect-cols" },

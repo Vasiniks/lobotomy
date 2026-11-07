@@ -193,6 +193,33 @@ class MLXBackend(Backend):
         lg = self.model.logits(h).astype(mx.float32)
         return lg - mx.logsumexp(lg, axis=-1, keepdims=True)
 
+    def attribute(self, token_ids, target_pos):
+        """Gradient of log p(token_ids[target_pos] | prefix) with respect to a
+        multiplicative mask on every MLP neuron (L, N) and head (L, H_max), at 1.
+
+        A mask scales the unit everywhere, like a weight edit does, so -grad is
+        the first-order estimate of how much log p would drop if it were cut.
+        """
+        cfg = self.config
+        m = self.model
+        ids = mx.array([token_ids[:target_pos]], dtype=mx.uint32)
+        target = int(token_ids[target_pos])
+
+        def logp(m_mlp, m_heads):
+            m._masks = {"mlp": m_mlp, "heads": m_heads}
+            try:
+                h = m.hidden(ids, m.new_cache(), None)
+            finally:
+                m._masks = None
+            lg = m.logits(h[0, -1]).astype(mx.float32)
+            return lg[target] - mx.logsumexp(lg)
+
+        ones_mlp = mx.ones((cfg.n_layers, cfg.intermediate_size), mx.float32)
+        ones_heads = mx.ones((cfg.n_layers, cfg.max_heads), mx.float32)
+        value, (g_mlp, g_heads) = mx.value_and_grad(logp, argnums=(0, 1))(ones_mlp, ones_heads)
+        mx.eval(value, g_mlp, g_heads)
+        return float(value.item()), np.array(g_mlp), np.array(g_heads)
+
     def score_variants(self, token_ids, start, variants, current_ops):
         """For each variant (a {tensor: ops} override), the KL from the current
         model on the tokens ``start..`` of ``token_ids``. Weights are restored to

@@ -130,6 +130,9 @@ class Qwen35:
         self.cfg = config
         self.w = weights
         self._gram: dict[str, mx.array] = {}
+        # Set during attribution: multiplicative masks on MLP neurons (L, N) and
+        # heads (L, H_max), and a differentiable path (no fused kernels, no cache).
+        self._masks: dict[str, mx.array] | None = None
 
     def invalidate(self, tensor: str) -> None:
         """Call after changing a weight, so cached derivatives are rebuilt."""
@@ -172,16 +175,27 @@ class Qwen35:
         k = mx.fast.rms_norm(k, 1.0 + self.w[p + "k_norm.weight"], cfg.rms_norm_eps).transpose(0, 2, 1, 3)
         v = v.transpose(0, 2, 1, 3)
 
-        off = cache.offset
+        diff = self._masks is not None
+        off = 0 if diff else cache.offset
         q = mx.fast.rope(q, cfg.rope_dim, traditional=False, base=cfg.rope_theta, scale=1.0, offset=off)
         k = mx.fast.rope(k, cfg.rope_dim, traditional=False, base=cfg.rope_theta, scale=1.0, offset=off)
-        keys, values = cache.update_and_fetch(k, v)
+        keys, values = (k, v) if diff else cache.update_and_fetch(k, v)
 
         scale = D**-0.5
-        mask = "causal" if T > 1 else None
-        out = mx.fast.scaled_dot_product_attention(q, keys, values, scale=scale, mask=mask)
+        if diff:
+            # plain ops so autodiff works
+            rep = H // Hkv
+            sc = (q.reshape(B, Hkv, rep, T, D) * scale) @ keys[:, :, None].swapaxes(-1, -2)
+            causal = mx.arange(T)[None, :] <= mx.arange(T)[:, None]
+            sc = mx.where(causal, sc.astype(mx.float32), -mx.inf)
+            out = (mx.softmax(sc, axis=-1).astype(v.dtype) @ values[:, :, None]).reshape(B, H, T, D)
+        else:
+            mask = "causal" if T > 1 else None
+            out = mx.fast.scaled_dot_product_attention(q, keys, values, scale=scale, mask=mask)
         out = out.transpose(0, 2, 1, 3)  # (B, T, H, D)
         out = out * mx.sigmoid(gate)
+        if diff:
+            out = out * self._masks["heads"][i, :H][None, None, :, None].astype(out.dtype)
 
         if rec is not None and rec.attention and rec.start < T:
             s = rec.start
@@ -215,9 +229,13 @@ class Qwen35:
         b = self._lin(x, p + "in_proj_b.weight")
         a = self._lin(x, p + "in_proj_a.weight")
 
-        conv_state = cache.conv if cache.conv is not None else mx.zeros((B, K - 1, qkv.shape[-1]), qkv.dtype)
+        if self._masks is not None or cache.conv is None:
+            conv_state = mx.zeros((B, K - 1, qkv.shape[-1]), qkv.dtype)
+        else:
+            conv_state = cache.conv
         conv_in = mx.concatenate([conv_state, qkv], axis=1)
-        cache.conv = mx.contiguous(conv_in[:, -(K - 1) :, :])
+        if self._masks is None:
+            cache.conv = mx.contiguous(conv_in[:, -(K - 1) :, :])
         # conv weight is stored (C, 1, K); mx.conv1d wants (C_out, K, C_in/groups)
         w_conv = self.w[p + "conv1d.weight"].swapaxes(1, 2)
         conv_out = nn.silu(mx.conv1d(conv_in, w_conv, groups=qkv.shape[-1]))
@@ -228,13 +246,19 @@ class Qwen35:
         v = v.reshape(B, T, Hv, Dv)
         q, k = normalize_qk(q, k, inv_scale=Dk**-0.5, eps=1e-6)
 
-        out, state = gated_delta_update(q, k, v, a, b, self.w[p + "A_log"], self.w[p + "dt_bias"], cache.ssm, None)
-        cache.ssm = state
-        cache.offset += T
+        diff = self._masks is not None
+        out, state = gated_delta_update(
+            q, k, v, a, b, self.w[p + "A_log"], self.w[p + "dt_bias"], None if diff else cache.ssm, None, use_kernel=not diff
+        )
+        if not diff:
+            cache.ssm = state
+            cache.offset += T
 
         # gated RMSNorm (plain gain, not 1 + w)
         normed = mx.fast.rms_norm(out, self.w[p + "norm.weight"], cfg.rms_norm_eps)
         out = (nn.silu(z.astype(mx.float32)) * normed.astype(mx.float32)).astype(x.dtype)
+        if diff:
+            out = out * self._masks["heads"][i, :Hv][None, None, :, None].astype(out.dtype)
 
         y = self._lin(out.reshape(B, T, Hv * Dv), p + "out_proj.weight")
         if rec is not None and rec.start < T:
@@ -244,6 +268,8 @@ class Qwen35:
     def _mlp(self, i: int, x: mx.array, rec: Recorder | None) -> mx.array:
         p = f"model.layers.{i}.mlp."
         act = swiglu(self._lin(x, p + "gate_proj.weight"), self._lin(x, p + "up_proj.weight"))
+        if self._masks is not None:
+            act = act * self._masks["mlp"][i].astype(act.dtype)
         if rec is not None and rec.start < x.shape[1]:
             rec.mlp[i] = act[:, rec.start :]
         return self._lin(act, p + "down_proj.weight")

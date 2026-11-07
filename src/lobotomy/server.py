@@ -462,6 +462,27 @@ def create_app(engine: Engine) -> FastAPI:
             x["top1_agree"] = _r(x["top1_agree"], 3)
         return {"kind": kind, "layer": layer, "value": value, "results": res}
 
+    @app.get("/api/replies/{reply_id}/why/{row}")
+    async def why(reply_id: int, row: int, k: int = 12):
+        """Which neurons and heads pushed the model toward this token (gradient estimate)."""
+        r = api.find(reply_id)
+        if r.recording is None or not 0 <= row < r.recording.n_positions:
+            raise HTTPException(404, "no such row")
+        try:
+            w = await api.run(eng.why, r, row, k)
+        except NotImplementedError:
+            raise HTTPException(501, "this backend can't compute attributions")
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        for group in ("support", "oppose"):
+            for u in w[group]:
+                u["effect"] = _r(u["effect"])
+                u["label"] = f"L{u['layer']} {'N' if u['kind'] == 'neuron' else 'H'}{u['index']}"
+        w["logp"] = _r(w["logp"])
+        w["prob"] = _r(w["prob"])
+        w["layer_effect"] = _rl(w["layer_effect"])
+        return w
+
     @app.get("/api/neuron/{layer}/{neuron}/says")
     async def neuron_says(layer: int, neuron: int, k: int = 10):
         return await api.run(eng.neuron_vocab, layer, neuron, k)

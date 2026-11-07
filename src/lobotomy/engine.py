@@ -446,6 +446,50 @@ class Engine:
             for t, s in zip(targets, scores)
         ]
 
+    def why(self, reply: Reply, row: int, k: int = 12) -> dict:
+        """Which neurons and heads pushed the model toward the token at this
+        recorded row? One backward pass; estimates, not measurements.
+
+        ``effect`` is the estimated change in log-probability of the token if
+        that unit were switched off (negative = cutting it makes the token less
+        likely). ``support`` lists the units whose removal would hurt the token
+        most; ``oppose`` lists the ones holding it back.
+        """
+        if reply.recording is None:
+            raise ValueError("no recording")
+        pos = int(reply.recording.positions[row])
+        if pos < 1:
+            raise ValueError("the first token has nothing before it")
+        ids = reply.prompt_ids + reply.token_ids
+        with self._lock:
+            logp, g_mlp, g_heads = self.backend.attribute(ids, pos)
+        cfg = self.config
+        for i in range(cfg.n_layers):  # heads that don't exist
+            g_heads[i, cfg.n_layer_heads(i):] = 0.0
+        units = []
+        flat = g_mlp.ravel()
+        for idx in np.concatenate([np.argpartition(-flat, k)[:k], np.argpartition(flat, k)[:k]]):
+            layer, n = divmod(int(idx), g_mlp.shape[1])
+            units.append({"kind": "neuron", "layer": layer, "index": n, "effect": -float(flat[idx])})
+        hf = g_heads.ravel()
+        kh = min(k, hf.size - 1)
+        for idx in np.concatenate([np.argpartition(-hf, kh)[:kh], np.argpartition(hf, kh)[:kh]]):
+            layer, h = divmod(int(idx), g_heads.shape[1])
+            if h < cfg.n_layer_heads(layer):
+                units.append({"kind": "head", "layer": layer, "index": h, "effect": -float(hf[idx])})
+        support = sorted((u for u in units if u["effect"] < 0), key=lambda u: u["effect"])[:k]
+        oppose = sorted((u for u in units if u["effect"] > 0), key=lambda u: -u["effect"])[:k]
+        layer_total = (-g_mlp.sum(axis=1) - g_heads.sum(axis=1)).tolist()
+        return {
+            "token": self.tokenizer.token_str(ids[pos]),
+            "position": pos,
+            "logp": logp,
+            "prob": float(np.exp(logp)),
+            "support": support,
+            "oppose": oppose,
+            "layer_effect": layer_total,
+        }
+
     def logit_lens(self, reply: Reply, row: int, k: int = 5) -> list[list[tuple[str, float]]]:
         """For one recorded position: the top-k next tokens implied after each layer."""
         vecs = reply.recording.resid_vec[row]  # (L, hidden)

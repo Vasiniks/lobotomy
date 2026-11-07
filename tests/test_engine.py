@@ -123,6 +123,27 @@ def test_scan_ranks_parts_and_restores_weights(fresh):
     assert len(fresh.edits) == 1
 
 
+def test_why_finds_units_whose_removal_hurts_the_token(fresh):
+    r = fresh.chat("What is the capital of Australia? One sentence.")
+    toks = r.recorded_tokens(fresh.tokenizer)
+    row = next(t["row"] for t in toks if t["role"] == "reply" and "Canberra" in t["text"])
+    w = fresh.why(r, row, k=10)
+    assert "Canberra" in w["token"] and 0 < w["prob"] <= 1
+    assert w["support"] and all(u["effect"] < 0 for u in w["support"])
+    assert len(w["layer_effect"]) == 24
+    ids = r.prompt_ids + r.token_ids
+    pos = w["position"]
+
+    def logp():
+        lg = fresh.backend.logits_for(ids[:pos])[-1].astype(np.float64)
+        return lg[ids[pos]] - (np.log(np.exp(lg - lg.max()).sum()) + lg.max())
+
+    base = logp()
+    for u in w["support"][:10]:
+        fresh.add_edit(Target(u["kind"], layer=u["layer"], index=u["index"]), value=0.0)
+    assert logp() < base - 1.0  # cutting the top supporters really hurts the token
+
+
 def test_analysis_helpers(fresh):
     r = fresh.chat(Q)
     rows = [t["row"] for t in r.recorded_tokens(fresh.tokenizer) if t["role"] == "reply"]

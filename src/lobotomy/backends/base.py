@@ -157,6 +157,12 @@ class Backend(ABC):
         """
         raise NotImplementedError
 
+    def attribute(self, token_ids: list[int], target_pos: int) -> tuple[float, np.ndarray, np.ndarray]:
+        """Attribution: ``(logp, grad_mlp (L, N), grad_heads (L, H_max))`` where the
+        grads are d log p(token_ids[target_pos] | prefix) / d mask, for
+        multiplicative masks (all 1) on every MLP neuron and head."""
+        raise NotImplementedError
+
     def score_variants(self, token_ids, start, variants, current_ops) -> list[dict]:
         """Ablation scan. For each variant ``{tensor: [SliceOp, ...]}`` (complete op
         lists for those tensors), measure the KL from the current model on tokens

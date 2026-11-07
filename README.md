@@ -38,6 +38,9 @@ The first start dequantizes the GGUF and caches the result in `models/.cache/`
 - **Word.** Click a word to see which layers and neurons fired on it, where each
   attention head looked, the candidates the model considered, and the logit
   lens (what each layer would have said next).
+- **Why this word?** One gradient pass ranks all 86,016 neurons and 336 heads by
+  how much each pushed the model toward that word (the estimated drop in its
+  log-probability if cut). **Make it stop saying it** switches off the top ten.
 - **Compare.** Ask again and the answers sit side by side, with the token where
   they split marked. Ask again reuses the seed, so differences come from your
   edits.
@@ -47,6 +50,11 @@ The first start dequantizes the GGUF and caches the result in `models/.cache/`
   latest reply), live while you edit.
 
 ![The chat with the layer stack](docs/screenshots/chat.png)
+
+"Why this word?" on *Canberra*, then *Make it stop saying "Canberra"*, then
+*Ask again*:
+
+![Healthy: "The capital of Australia is Canberra." With 10 edits: "Australia's capital city is Sydney."](docs/screenshots/compare.png)
 
 The visual design (tokens, logos, mockups) is in [design/](design/DESIGN.md).
 
