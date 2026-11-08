@@ -1,3 +1,4 @@
+import json
 import os
 import platform
 from pathlib import Path
@@ -31,6 +32,21 @@ def gguf_model():
 @pytest.fixture(scope="session")
 def config(gguf_model):
     return gguf_model.config
+
+
+@pytest.fixture(scope="session")
+def official(config):
+    """The official checkpoint's folder, for the reference tests. Skips when it isn't
+    downloaded, or when it's a different size from the model under test (the
+    folder holds the 0.8B; LOBOTOMY_MODEL may point at a 2B)."""
+    if not list(HF_DIR.glob("*.safetensors")):
+        pytest.skip("official checkpoint not downloaded")
+    c = json.loads((HF_DIR / "config.json").read_text())
+    c = c.get("text_config", c)
+    ref = (c["num_hidden_layers"], c["hidden_size"], c["intermediate_size"])
+    if ref != (config.n_layers, config.hidden_size, config.intermediate_size):
+        pytest.skip(f"the official checkpoint in {HF_DIR.name} is a different size from {MODEL.name}")
+    return HF_DIR
 
 
 @pytest.fixture(scope="session")

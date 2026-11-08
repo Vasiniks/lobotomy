@@ -11,6 +11,10 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
+# Turning thinking on raises a lower reply limit to this, so the model can finish
+# its thought before answering (512 cut magi-1.2-2B off mid-thought).
+THINK_MAX_TOKENS = 2048
+
 
 @dataclass
 class SamplingParams:

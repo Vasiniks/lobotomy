@@ -7,6 +7,8 @@ import {
   clear, editClass, editValueText, fmt, fmtCost, fmtProb, fmtScale, h, percentile, rangeBin, s, showToken, SLIDER, sliderToValue, valueToSlider,
 } from "./util.js";
 
+const THINK_MAX_TOKENS = 2048; // as in sampling.py
+
 // --- labels ---------------------------------------------------------------------------
 
 export function layerTypeName(layer) {
@@ -37,7 +39,10 @@ export function swatch(edit, lg = false) {
 export function renderTopbar(el, crumbs = []) {
   clear(el);
   const m = state.model;
-  const quant = m?.model_file?.match(/(Q\d_[A-Z0-9_]+|IQ\d_[A-Z]+|BF16|F16)/)?.[0] ?? "";
+  // the file's name (a fine-tune like magi-1.2-2B is named by its file, not by the
+  // name inside the GGUF), plus the model inside it when the name doesn't say
+  const file = m?.model_file?.replace(/\.gguf$/i, "") ?? "";
+  const base = m && !file.includes(m.name) ? m.name : "";
   const n = state.edits.length;
 
   const damage = state.damage;
@@ -65,8 +70,8 @@ export function renderTopbar(el, crumbs = []) {
       "div",
       { class: `model${state.busy ? " is-busy" : ""}` },
       h("span", { class: "status-dot", title: state.busy ? "Generating" : "Ready" }),
-      h("strong", {}, m?.name ?? "…"),
-      quant && h("span", {}, quant),
+      h("strong", { title: m?.model_file ?? "" }, file || "…"),
+      base && h("span", { title: "The model inside the file" }, base),
       m && h("span", {}, m.backend.toUpperCase()),
     ),
     crumbs.length
@@ -540,7 +545,24 @@ export function openSettings(anchor) {
   const st = state.settings;
   const num = (key, label, attrs) =>
     h("label", { class: "field" }, label, h("input", { type: "number", value: st[key], "data-key": key, ...attrs }));
-  const think = h("input", { type: "checkbox", checked: st.enable_thinking });
+  let raisedFrom = null;
+  const think = h("input", {
+    type: "checkbox",
+    checked: st.enable_thinking,
+    // thinking needs room: raise a lower reply limit, visibly, so the model can
+    // finish its thought (512 cut magi-1.2-2B off mid-thought); still editable,
+    // and unticking puts back the value the tick replaced
+    onchange: () => {
+      const max = form.querySelector('input[data-key="max_tokens"]');
+      if (think.checked && Number(max.value) < THINK_MAX_TOKENS) {
+        raisedFrom = max.value;
+        max.value = THINK_MAX_TOKENS;
+      } else if (!think.checked && raisedFrom !== null && Number(max.value) === THINK_MAX_TOKENS) {
+        max.value = raisedFrom;
+        raisedFrom = null;
+      }
+    },
+  });
   const reread = h("input", { type: "checkbox", checked: st.reread !== false });
   const sys = h("textarea", { placeholder: "Optional system prompt" }, st.system_prompt ?? "");
   const form = h(

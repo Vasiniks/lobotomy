@@ -1,24 +1,22 @@
 """The MLX model against mlx-lm's own Qwen3.5 implementation.
 
-Needs the official checkpoint in models/qwen3.5-0.8b-hf (see README) and mlx-lm.
+Needs the official checkpoint in models/qwen3.5-0.8b-hf (see README) and mlx-lm,
+and skips when the model under test is a different size from that checkpoint.
 """
 
 import numpy as np
 import pytest
 
-from conftest import HF_DIR, needs_model
+from conftest import needs_model
 
-pytestmark = [
-    needs_model,
-    pytest.mark.skipif(not list(HF_DIR.glob("*.safetensors")), reason="official checkpoint not downloaded"),
-]
+pytestmark = needs_model
 
 
 @pytest.fixture(scope="module")
-def ref(tokenizer):
+def ref(tokenizer, official):
     mx = pytest.importorskip("mlx.core")
     mlx_lm = pytest.importorskip("mlx_lm")
-    model, _ = mlx_lm.load(str(HF_DIR))
+    model, _ = mlx_lm.load(str(official))
     text = tokenizer.render_chat([{"role": "user", "content": "Explain why the sky is blue in two sentences."}])
     ids = tokenizer.encode(text)
     logits = model(mx.array([ids]))[0].astype(mx.float32)
@@ -32,13 +30,13 @@ def _kl(mx, p, q):
     return mx.sum(mx.exp(lp) * (lp - lq), -1)
 
 
-def test_forward_pass_matches_mlx_lm_on_official_weights(ref, config):
+def test_forward_pass_matches_mlx_lm_on_official_weights(ref, config, official):
     mx = pytest.importorskip("mlx.core")
     from lobotomy.backends.mlx.model import Qwen35
 
     ids, ref_logits = ref
     raw = {}
-    for f in HF_DIR.glob("*.safetensors"):
+    for f in official.glob("*.safetensors"):
         raw.update(mx.load(str(f)))
     w = {k.replace("model.language_model.", "model."): v for k, v in raw.items() if k.startswith("model.language_model.")}
     w = {k: (v.astype(mx.float32) if k.endswith(("A_log", "dt_bias")) else v) for k, v in w.items()}

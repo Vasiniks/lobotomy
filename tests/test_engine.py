@@ -115,11 +115,29 @@ def test_keep_memory_matches_reread_without_edits(fresh):
         # ask again with no edits: rewinds to the snapshot, same answer
         b3 = fresh.ask_again()
         assert b3.kept_memory and b3.token_ids == b2.token_ids
-        # and matches a fresh full read of the same tokens
-        lg_full = fresh.backend.logits_for(b2.prompt_ids)[-1]
-        assert int(np.argmax(lg_full)) == b2.token_ids[0]
+        # and matches a fresh full read of the same tokens, up to bfloat16 rounding:
+        # reading word by word and reading all at once round differently, which
+        # can swap two nearly tied words (magi-1.2-2B: "You" 0.285 vs "Based" 0.251;
+        # in float32 the two reads agree to 4 decimals)
+        lg = fresh.backend.logits_for(b2.prompt_ids)[-1].astype(np.float64)
+        p = np.exp(lg - lg.max())
+        p /= p.sum()
+        for tid, q in b2.alternatives[0]:
+            assert abs(p[tid] - q) < 0.05, (tok.token_str(tid), p[tid], q)
+        assert p[b2.token_ids[0]] > p.max() - 0.05  # the greedy pick is the top word, or tied with it
     finally:
         fresh.reread = True
+
+
+def test_recordings_are_kept_within_a_memory_budget(fresh):
+    fresh.recording_budget = 1  # byte: only the newest reply keeps its full recording
+    try:
+        a = fresh.chat(Q)
+        b = fresh.chat(Q)
+        assert a.cache.get("trimmed") and a.recording.mlp is None
+        assert b.recording.mlp is not None and not b.cache.get("trimmed")
+    finally:
+        fresh.recording_budget = 2 << 30
 
 
 def test_keep_memory_old_turns_stay_healthy(fresh):
@@ -270,7 +288,7 @@ def test_flow_steps_line_up_with_the_words(fresh):
     idx = np.frombuffer(base64.b64decode(f["idx"]), "<u2").reshape(S, L, k)
     val = np.frombuffer(base64.b64decode(f["val"]), np.uint8).reshape(S, L, k)
     a = np.abs(r.recording.mlp[f["steps"][3]["row"]].astype(np.float32))
-    assert (idx[3, :, 0] == a.argmax(axis=1)).all()
+    assert (a[np.arange(L), idx[3, :, 0]] == a.max(axis=1)).all()  # sizes: neurons can tie
     assert (np.diff(val.astype(int), axis=2) <= 0).all()  # strongest first
     assert len(f["scale"]) == L and min(f["scale"]) > 0
 
@@ -286,7 +304,9 @@ def test_token_events_carry_their_strongest_neurons(fresh):
     toks = r.recorded_tokens(fresh.tokenizer)
     row = next(t["row"] for t in toks if t["role"] == "reply") - 1
     a = np.abs(r.recording.mlp[row].astype(np.float32))
-    assert [ix[0] for ix in first["idx"]] == a.argmax(axis=1).tolist()
+    # compare sizes, not indices: two neurons can tie exactly in float16
+    # (Qwen3.5 2B, layer 16: neurons 1021 and 5619 both at 1.5781)
+    assert [a[layer, ix[0]] for layer, ix in enumerate(first["idx"])] == a.max(axis=1).tolist()
 
 
 def test_flow_carries_head_activity(fresh):

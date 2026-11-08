@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import analysis as A
 from .edits import Target
-from .sampling import SamplingParams
+from .sampling import THINK_MAX_TOKENS, SamplingParams
 
 DEFAULT_MODEL = Path("models/Qwen3.5-0.8B-Q4_K_M.gguf")
 
@@ -213,6 +213,9 @@ class Repl:
             eng.sampling.max_tokens = int(args[0])
         elif cmd == "think":
             eng.enable_thinking = args[0] == "on"
+            if eng.enable_thinking and eng.sampling.max_tokens < THINK_MAX_TOKENS:
+                eng.sampling.max_tokens = THINK_MAX_TOKENS
+                self.out(f"thinking on; max reply tokens raised to {THINK_MAX_TOKENS} so it can finish its thought (/max N to change)")
         elif cmd == "reread":
             eng.reread = args[0] != "off"
             self.out(

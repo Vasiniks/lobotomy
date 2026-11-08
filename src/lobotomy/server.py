@@ -136,7 +136,7 @@ class Api:
         if r.cache.get("trimmed"):
             raise HTTPException(
                 410,
-                f"this answer's full recording was dropped to save memory (only the {self.eng.keep_recordings} newest keep it)",
+                "this answer's full recording was dropped to save memory (only the newest answers keep theirs)",
             )
         return r
 
@@ -197,7 +197,7 @@ class Api:
 def neuron_mean(r: Reply) -> np.ndarray:
     """(rows, layers) mean |activation|, cached on the reply (survives trimming)."""
     if "neuron_mean" not in r.cache:
-        r.cache["neuron_mean"] = np.abs(r.recording.mlp.astype(np.float32)).mean(-1)
+        r.cache["neuron_mean"] = A.mean_abs(r.recording.mlp)
     return r.cache["neuron_mean"]
 
 

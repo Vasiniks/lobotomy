@@ -118,6 +118,16 @@ Everything under "Screen" above is built, plus the following:
   with a dashed ring.
 - **The theme follows the system setting** until toggled. The design opened
   dark always.
+- **Thinking raises the reply limit to 2,048 tokens** (2026-11-08). Ticking
+  "Let the model think first" or `/think on` raises a lower limit, visibly, and
+  it stays editable. At 512, magi-1.2-2B was cut off mid-thought.
+- **Full recordings are kept up to 8 replies and 2 GB together,** newest first,
+  and the newest always. A 512-token reply records 0.1–0.2 GB, but a 2,048-token
+  thinking reply on the 2B records about 1 GB.
+- **The top bar names the model by its file** (2026-11-08). A fine-tune like
+  magi-1.2-2B carries its base model's name inside the GGUF ("Qwen3.5-2B"),
+  so that name is shown beside the file name when the file name doesn't
+  include it.
 
 ### The 3D layer stack (2026-11-07, first build; the look is still open)
 

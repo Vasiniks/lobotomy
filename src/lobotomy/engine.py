@@ -113,6 +113,11 @@ class Exchange:
         return self.replies[-1] if self.replies else None
 
 
+def _recording_bytes(rec: Recording) -> int:
+    arrays = [rec.mlp, rec.heads, rec.mixer_out, rec.mlp_out, rec.resid, rec.resid_vec, *rec.attention.values()]
+    return sum(a.nbytes for a in arrays if a is not None)
+
+
 class Engine:
     def __init__(
         self,
@@ -145,9 +150,12 @@ class Engine:
         # False ("keep memory"): earlier turns stay as the model read them under
         # the weights of the time; only new tokens use the current weights.
         self.reread = True
-        # Full recordings (every neuron at every token) are ~100 MB per reply;
+        # Full recordings (every neuron at every token) are ~100-200 MB for a
+        # 512-token reply, but ~1 GB for a 2,048-token thinking reply on the 2B.
+        # The newest ones are kept up to both limits (the newest always);
         # older replies keep only the small summaries the chat and compare views need.
         self.keep_recordings = 8
+        self.recording_budget = 2 << 30  # bytes
         # neurons per layer sent with every streamed token, for the live 3D view
         self.flow_k = 32
         self._mem: dict | None = None  # cache after the latest reply
@@ -521,16 +529,21 @@ class Engine:
         }
 
     def _trim_old_recordings(self) -> None:
-        replies = sorted((r for ex in self.exchanges for r in ex.replies), key=lambda r: r.id)
-        for r in replies[: max(0, len(replies) - self.keep_recordings)]:
+        from . import analysis as A
+
+        newest_first = sorted((r for ex in self.exchanges for r in ex.replies), key=lambda r: -r.id)
+        kept, kept_bytes = 0, 0
+        for r in newest_first:
             rec = r.recording
             if rec is None or rec.mlp is None:
                 continue
-            from . import analysis as A
-
+            size = _recording_bytes(rec)
+            if kept == 0 or (kept < self.keep_recordings and kept_bytes + size <= self.recording_budget):
+                kept, kept_bytes = kept + 1, kept_bytes + size
+                continue
             r.recorded_tokens(self.tokenizer)  # cache token texts
             reply_rows = [i for i in range(rec.n_positions) if int(rec.positions[i]) >= r.prompt_len]
-            r.cache["neuron_mean"] = np.abs(rec.mlp.astype(np.float32)).mean(-1)
+            r.cache["neuron_mean"] = A.mean_abs(rec.mlp)
             r.cache["layers:reply"] = A.layer_activity(rec, reply_rows)
             r.recording = replace(rec, mlp=None, resid_vec=None, attention={})
             r.cache["trimmed"] = True
@@ -700,7 +713,7 @@ class Engine:
                 }
             )
         scale = np.maximum(np.asarray(reply.layer_refs(), np.float32), 1e-6)
-        idx, val = top_by_layer(rec.mlp[rows], k)  # (S, L, k)
+        idx, val = top_by_layer(rec.mlp[rows[0] : rows[-1] + 1], k)  # (S, L, k); rows are consecutive, so a view
         q = np.round(np.clip(np.abs(val) / scale[None, :, None], 0, 1) * 255).astype(np.uint8)
         # heads: each one's output size, against the layer's 99th percentile over the reply
         cfg = self.config

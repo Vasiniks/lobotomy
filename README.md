@@ -254,13 +254,14 @@ design/             design system: tokens, logo, mockups
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest -q        # 71 tests, about a minute
+.venv/bin/python -m pytest -q        # 72 tests, about a minute
+LOBOTOMY_MODEL=models/Qwen3.5-2B-Q4_K_M.gguf .venv/bin/python -m pytest -q   # the same tests on another GGUF
 ```
 
 The reference tests compare against mlx-lm's own Qwen3.5 running the official
 weights. They are skipped unless the official checkpoint is in
-`models/qwen3.5-0.8b-hf/`: `config.json`, `tokenizer.json` and the safetensors
-from `Qwen/Qwen3.5-0.8B`.
+`models/qwen3.5-0.8b-hf/` (`config.json`, `tokenizer.json` and the safetensors
+from `Qwen/Qwen3.5-0.8B`) and is the same size as the model under test.
 
 ## Writing the CUDA backend
 

@@ -12,6 +12,10 @@ import numpy as np
 
 from .backends.base import Recording
 
+# Positions per block when a whole recording is reduced. A 2,048-token reply on
+# the 2B is 2,048 x 24 x 6,144 activations: 1.2 GB as float32 all at once.
+CHUNK = 128
+
 
 def _rows(rec: Recording, rows) -> np.ndarray:
     if rows is None:
@@ -19,20 +23,32 @@ def _rows(rec: Recording, rows) -> np.ndarray:
     return np.asarray(rows, dtype=np.int64)
 
 
+def mean_abs(mlp: np.ndarray) -> np.ndarray:
+    """(T, L) mean |activation| over each layer's neurons, at every position."""
+    out = np.empty(mlp.shape[:2], np.float32)
+    for i in range(0, len(mlp), CHUNK):
+        out[i : i + CHUNK] = np.abs(mlp[i : i + CHUNK].astype(np.float32)).mean(-1)
+    return out
+
+
 def layer_activity(rec: Recording, rows=None) -> list[dict]:
     """Per layer: how busy it was over the selected positions."""
     r = _rows(rec, rows)
-    mlp = np.abs(rec.mlp[r].astype(np.float32))  # (T, L, N)
+    L, N = rec.mlp.shape[1:]
+    total, peak = np.zeros(L, np.float64), np.zeros(L, np.float32)
+    for i in range(0, len(r), CHUNK):
+        a = np.abs(rec.mlp[r[i : i + CHUNK]].astype(np.float32))  # (t, L, N)
+        total += a.sum(axis=(0, 2), dtype=np.float64)
+        peak = np.maximum(peak, a.max(axis=(0, 2)))
     out = []
-    for i in range(rec.mlp.shape[1]):
-        a = mlp[:, i, :]
+    for i in range(L):
         heads = rec.heads[r, i, :]
         heads = heads[:, ~np.isnan(heads[0])] if len(r) else heads
         out.append(
             {
                 "layer": i,
-                "neuron_mean": float(a.mean()) if a.size else 0.0,
-                "neuron_peak": float(a.max()) if a.size else 0.0,
+                "neuron_mean": float(total[i] / (len(r) * N)) if len(r) else 0.0,
+                "neuron_peak": float(peak[i]) if len(r) else 0.0,
                 "mixer_out": float(rec.mixer_out[r, i].mean()) if len(r) else 0.0,
                 "mlp_out": float(rec.mlp_out[r, i].mean()) if len(r) else 0.0,
                 "resid": float(rec.resid[r, i].mean()) if len(r) else 0.0,
@@ -152,8 +168,12 @@ def top_by_layer(vals: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """The k neurons that fired hardest (by size) in every layer, strongest first.
 
     ``vals`` is (..., L, N) activations; returns indices (..., L, k) and their
-    signed values (..., L, k). Used by the 3D view's lines.
+    signed values (..., L, k). Used by the 3D view's lines. A whole recording
+    (T, L, N) goes a block of positions at a time.
     """
+    if np.ndim(vals) == 3 and len(vals) > CHUNK:
+        parts = [top_by_layer(vals[i : i + CHUNK], k) for i in range(0, len(vals), CHUNK)]
+        return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
     v = np.asarray(vals, np.float32)
     a = np.abs(v)
     k = max(1, min(int(k), a.shape[-1]))
