@@ -636,9 +636,27 @@ def create_app(engine: Engine) -> FastAPI:
     return app
 
 
-def serve(engine: Engine, host: str = "127.0.0.1", port: int = 7860) -> None:
+def serve(engine: Engine, host: str = "127.0.0.1", port: int = 7860, open_browser: bool = False) -> None:
     import uvicorn
 
     app = create_app(engine)
-    print(f"lobotomy is running at http://{host}:{port}", flush=True)
+    url = f"http://{host}:{port}"
+    print(f"lobotomy is running at {url}  (Ctrl-C stops it)", flush=True)
+    if open_browser:
+        threading.Thread(target=_open_when_up, args=(host, port, url), daemon=True).start()
     uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
+def _open_when_up(host: str, port: int, url: str) -> None:
+    """Open the app in the browser once the server accepts connections."""
+    import socket
+    import time
+    import webbrowser
+
+    for _ in range(100):
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                break
+        except OSError:
+            time.sleep(0.2)
+    webbrowser.open(url)

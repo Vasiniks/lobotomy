@@ -14,6 +14,16 @@ if [ -f "models/${FILE}" ]; then
   exit 0
 fi
 echo "downloading ${URL}"
-curl -L --fail --progress-bar -o "models/${FILE}.part" "${URL}"
-mv "models/${FILE}.part" "models/${FILE}"
-echo "saved models/${FILE}"
+# Resume a partial download (-C -) and retry when the connection drops, so a
+# flaky network or a re-run never starts the 533 MB over.
+for attempt in 1 2 3 4 5; do
+  if curl -L --fail --progress-bar -C - -o "models/${FILE}.part" "${URL}"; then
+    mv "models/${FILE}.part" "models/${FILE}"
+    echo "saved models/${FILE}"
+    exit 0
+  fi
+  echo "download interrupted (attempt ${attempt} of 5); resuming in 3 s" >&2
+  sleep 3
+done
+echo "couldn't download ${FILE}; run this script again to resume" >&2
+exit 1

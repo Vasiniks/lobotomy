@@ -17,6 +17,7 @@ from .edits import Target
 from .sampling import THINK_MAX_TOKENS, SamplingParams
 
 DEFAULT_MODEL = Path("models/Qwen3.5-0.8B-Q4_K_M.gguf")
+REPO_ROOT = Path(__file__).resolve().parents[2]  # the checkout, for an install made with `pip install -e .`
 
 HELP = """\
 Type a message to chat. Commands:
@@ -260,20 +261,27 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd")
     for name in ("chat", "serve"):
         p = sub.add_parser(name)
-        p.add_argument("--model", type=Path, default=DEFAULT_MODEL)
+        p.add_argument("--model", type=Path, default=None, help=f"a Qwen3.5 GGUF (default: {DEFAULT_MODEL})")
         p.add_argument("--backend", default=None, help="mlx or cuda (default: mlx on Apple Silicon)")
         p.add_argument("--dtype", default="bfloat16")
         if name == "serve":
             p.add_argument("--host", default="127.0.0.1")
             p.add_argument("--port", type=int, default=7860)
+            p.add_argument("--open", action="store_true", help="open the app in the browser once it's ready")
     args = ap.parse_args(argv)
     if args.cmd is None:
         args = ap.parse_args(["chat", *(argv or sys.argv[1:])])
 
+    if args.model is None:
+        # the default model, looked for here and in the checkout this runs
+        # from, so `~/lobotomy/.venv/bin/lobotomy serve` works from any folder
+        candidates = [DEFAULT_MODEL, REPO_ROOT / DEFAULT_MODEL]
+        args.model = next((p for p in candidates if p.exists()), DEFAULT_MODEL)
     if not args.model.exists():
+        script = REPO_ROOT / "scripts" / "download_model.sh"
         sys.exit(
             f"model not found: {args.model}\n"
-            "download it with: scripts/download_model.sh  (or pass --model PATH)"
+            f"download it with: {script if script.exists() else 'scripts/download_model.sh'}  (or pass --model PATH)"
         )
 
     from .engine import Engine
@@ -282,7 +290,7 @@ def main(argv=None):
     if args.cmd == "serve":
         from .server import serve
 
-        serve(engine, host=args.host, port=args.port)
+        serve(engine, host=args.host, port=args.port, open_browser=args.open)
     else:
         Repl(engine).run()
 
