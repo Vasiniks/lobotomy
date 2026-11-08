@@ -124,7 +124,7 @@
 .s3d-slider-cells { left: 0; right: 0; top: 7px; height: 10px; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 2px; }
 .s3d-slider-cells span { border-radius: 1px; background: var(--act-1); }
 .s3d-slider-cells span.on { background: color-mix(in oklab, var(--act-4), var(--act-8) calc(var(--i) * 100%)); box-shadow: 0 0 6px -1px color-mix(in oklab, var(--act-7) calc(var(--i) * 70%), transparent); }
-.s3d-slider-notch { bottom: 0; left: calc(var(--d) * 100%); width: 0; height: 0; border: 4px solid transparent; border-top: 0; border-bottom: 4px solid var(--ink-3); transform: translateX(-50%); }
+.s3d-slider-notch { bottom: 0; left: calc(var(--d) * 100%); width: 8px; height: 4px; background: var(--ink-3); clip-path: polygon(50% 0, 100% 100%, 0 100%); transform: translateX(-50%); }
 .s3d-slider-thumb { top: 3px; left: calc(var(--p) * 100%); width: 3px; height: 18px; margin-left: -1.5px; border-radius: 1px; background: var(--ink-1); box-shadow: 0 0 0 2px var(--surface-deep), 0 0 10px 1px color-mix(in oklab, var(--act-8) 70%, transparent); }
 
 /* ---------- the timeline (follows the page theme) ---------- */
