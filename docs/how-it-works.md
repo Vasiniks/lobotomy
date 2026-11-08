@@ -149,14 +149,16 @@ word.
 **Lines to neurons.** At every layer, lines go from the line through the
 sheets (the residual stream) to that layer's 48 strongest neurons for the
 word. Thickness is the size of the activation against the layer's 99.9th
-percentile over the reply, the same reference "Why this word?" uses. A
-neuron's size and brightness follow the same number, and it glows once it
-passes 40% of that reference: the glow adds no new quantity, it just makes the
-hard-firing ones easy to find. Your edited neurons are drawn in their edit
-colour instead, whatever they did.
+percentile over the reply, the same reference "Why this word?" uses. On the
+layer the word has reached, a neuron's column height and brightness follow the
+same number. Behind the word the columns shrink towards small tiles (about 60%
+lower for every three layers back), so in the tower a column's height is that
+number times how near the layer is to the word; a pulled-out layer shows the
+number alone. Your edited neurons are drawn in their edit colour, whatever
+they did.
 **Check:** pull out a layer at a word and open the 2D layer view for the same
-word (Open in 2D, then pick the word). The thickest lines go to the brightest
-cells.
+word (Open in 2D, then pick the word). The thickest lines and tallest columns
+go to the brightest cells.
 
 **Head tiles.** A tile's height and lightness is the size of what that head
 wrote into the stream for this word (the same number as in the head cells),

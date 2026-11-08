@@ -124,13 +124,121 @@ export function toggleTheme() {
 // askAgain: show the rail's "Ask again" (the screen's one bone primary) when
 // something changed since the last reply. The chat view has its own in the
 // pending card, so it passes false.
-export function renderRail(el, { askAgain = true } = {}) {
+// The edits rail lists every edit grouped by what it changes; a row opens into
+// a tweaker. Which row is open and which groups are folded survive re-renders.
+const EDIT_GROUPS = [
+  { kind: "neuron", name: "Neurons" },
+  { kind: "head", name: "Heads" },
+  { kind: "layer", name: "Layers" },
+  { kind: "token", name: "Tokens" },
+  { kind: "weight", name: "Weights" },
+];
+const railUi = { open: null, folded: new Set(), focusKey: null };
+const NOISE_STEPS = [0.1, 0.25, 0.5, 1, 2, 4];
+
+function byPlace(a, b) {
+  const t = a.target, u = b.target;
+  return (t.layer ?? -1) - (u.layer ?? -1) || (t.index ?? -1) - (u.index ?? -1) || String(t.part).localeCompare(String(u.part)) || a.id - b.id;
+}
+
+function editTweaker(e) {
+  const t = e.target;
+  const layerLink =
+    t.layer !== undefined && t.layer !== null
+      ? h("a", { class: "edit-open", href: `#/layer/${t.layer}`, "data-key": `open-${e.id}` }, `Open layer ${t.layer}`)
+      : null;
+  if (e.op === "noise") {
+    return h(
+      "div",
+      { class: "edit-tweak" },
+      h("span", { class: "meta" }, "Noise strength, relative to the weights' own size"),
+      h(
+        "div",
+        { class: "seg", role: "group", "aria-label": "Noise strength" },
+        NOISE_STEPS.map((v) =>
+          h(
+            "button",
+            { type: "button", "aria-pressed": String(Math.abs(e.value - v) < 1e-6), "data-key": `noise-${e.id}-${v}`, onclick: () => S.tweak(e.id, v) },
+            String(v),
+          ),
+        ),
+      ),
+      layerLink,
+    );
+  }
+  const readout = h("span", { class: "readout" }, fmtScale(e.value));
+  const { el: sliderEl } = scaleSlider({
+    value: e.value,
+    key: `scale-${e.id}`,
+    onInput: (v) => (readout.textContent = fmtScale(v)),
+    onChange: (v) => S.tweak(e.id, v),
+  });
+  const quick = [
+    [0, "Off"],
+    [0.5, "×½"],
+    [2, "×2"],
+    [4, "×4"],
+  ];
+  return h(
+    "div",
+    { class: "edit-tweak" },
+    sliderEl,
+    h(
+      "div",
+      { class: "edit-tweak-row" },
+      h(
+        "div",
+        { class: "seg", role: "group", "aria-label": "Quick values" },
+        quick.map(([v, label]) =>
+          h("button", { type: "button", "aria-pressed": String(e.value === v), "data-key": `quick-${e.id}-${v}`, onclick: () => S.tweak(e.id, v) }, label),
+        ),
+      ),
+      readout,
+    ),
+    e.value === 1 ? h("p", { class: "meta" }, "×1 changes nothing. Undo removes it.") : null,
+    layerLink,
+  );
+}
+
+// Every update rebuilds the page body, so the rail lives in one element that
+// each new view takes over; it's rebuilt only when what it shows changed, so a
+// slider being dragged or a focused button survives other updates.
+let railRoot = null;
+
+function adoptRail(el) {
+  if (!railRoot) {
+    railRoot = el;
+    el.addEventListener("focusin", (e) => (railUi.focusKey = e.target.dataset?.key ?? null));
+    el.addEventListener("focusout", (e) => {
+      if (e.relatedTarget && !el.contains(e.relatedTarget)) railUi.focusKey = null;
+    });
+    document.addEventListener("pointerdown", (e) => !el.contains(e.target) && (railUi.focusKey = null), true);
+  } else if (el !== railRoot) {
+    el.replaceWith(railRoot);
+  }
+  return railRoot;
+}
+
+function restoreRailFocus(el) {
+  const a = document.activeElement;
+  // only when the rebuild dropped focus (it fell to the body), never to steal it
+  if (!railUi.focusKey || (a && a !== document.body)) return;
+  el.querySelector(`[data-key="${CSS.escape(railUi.focusKey)}"]`)?.focus();
+}
+
+export function renderRail(target, { askAgain = true } = {}) {
+  const el = adoptRail(target);
+  const edits = state.edits;
+  const canAsk = askAgain && state.exchanges.length && !state.busy && S.editsSince(S.lastReply());
+  const sig = JSON.stringify([edits, railUi.open, [...railUi.folded], canAsk, state.presets?.length ?? 0, askAgain]);
+  if (el.dataset.sig === sig && el.childElementCount) return restoreRailFocus(el);
+  el.dataset.sig = sig;
   clear(el);
   // keep the hovered edit across re-renders (its row is rebuilt under the pointer)
   const hovered = S.hover.edit && state.edits.find((x) => x.id === S.hover.edit.id);
   S.setHoverEdit(hovered || null);
-  const edits = state.edits;
-  const canAsk = askAgain && state.exchanges.length && !state.busy && S.editsSince(S.lastReply());
+  const rerender = () => renderRail(el, { askAgain });
+  if (railUi.open !== null && !edits.some((e) => e.id === railUi.open)) railUi.open = null;
   const fileInput = h("input", {
     type: "file",
     accept: "application/json,.json",
@@ -150,35 +258,86 @@ export function renderRail(el, { askAgain = true } = {}) {
     h("div", { class: "pane-head" }, h("h2", {}, "Edits"), h("span", { class: "count num" }, String(edits.length))),
     edits.length
       ? h(
-          "ol",
-          { class: "edit-list", onmouseleave: () => S.setHoverEdit(null) },
-          edits.map((e) =>
-            h(
-              "li",
-              {
-                class: "edit",
-                // the 3D view marks where this edit is while you point at it
-                onmouseover: () => S.setHoverEdit(e),
-                onmouseleave: () => S.setHoverEdit(null),
-                onfocusin: () => S.setHoverEdit(e),
-                onfocusout: () => S.setHoverEdit(null),
-              },
-              swatch(e, true),
+          "div",
+          { class: "edit-groups", onmouseleave: () => S.setHoverEdit(null) },
+          EDIT_GROUPS.map((g) => {
+            const list = edits.filter((e) => e.target.kind === g.kind).sort(byPlace);
+            if (!list.length) return null;
+            const folded = railUi.folded.has(g.kind);
+            return h(
+              "section",
+              { class: "edit-group", "aria-label": g.name },
               h(
-                "a",
-                {
-                  class: "edit-target",
-                  href: e.target.layer !== undefined && e.target.layer !== null ? `#/layer/${e.target.layer}` : "#/",
-                  title: e.label,
-                  style: { textDecoration: "none" },
-                },
-                shortLabel(e.target),
+                "div",
+                { class: "edit-group-head" },
+                h(
+                  "button",
+                  {
+                    class: "edit-group-toggle",
+                    type: "button",
+                    "aria-expanded": String(!folded),
+                    "data-key": `group-${g.kind}`,
+                    onclick: () => {
+                      if (folded) railUi.folded.delete(g.kind);
+                      else railUi.folded.add(g.kind);
+                      rerender();
+                    },
+                  },
+                  h("span", { class: "chev", "aria-hidden": "true" }, "▾"),
+                  h("span", { class: "edit-group-name" }, g.name),
+                  h("span", { class: "count num" }, String(list.length)),
+                  folded ? h("span", { class: "swatches", "aria-hidden": "true" }, list.slice(0, 12).map((e) => swatch(e))) : null,
+                ),
+                list.length > 1
+                  ? h(
+                      "button",
+                      { class: "btn btn-quiet btn-sm", type: "button", "data-key": `undo-${g.kind}`, onclick: () => S.undoMany(list.map((e) => e.id)) },
+                      "Undo all",
+                    )
+                  : null,
               ),
-              h("span", { class: "edit-val" }, editValueText(e)),
-              h("button", { class: "btn btn-quiet btn-sm", type: "button", onclick: () => S.undo(e.id) }, "Undo"),
-              e.note ? h("span", { class: "edit-why" }, e.note) : null,
-            ),
-          ),
+              folded
+                ? null
+                : h(
+                    "ol",
+                    { class: "edit-list" },
+                    list.map((e) => {
+                      const open = railUi.open === e.id;
+                      return h(
+                        "li",
+                        {
+                          class: `edit${open ? " is-open" : ""}`,
+                          // the 3D view marks where this edit is while you point at it
+                          onmouseover: () => S.setHoverEdit(e),
+                          onmouseleave: () => S.setHoverEdit(null),
+                          onfocusin: () => S.setHoverEdit(e),
+                          onfocusout: () => S.setHoverEdit(null),
+                        },
+                        swatch(e, true),
+                        h(
+                          "button",
+                          {
+                            class: "edit-target",
+                            type: "button",
+                            "aria-expanded": String(open),
+                            title: open ? "Close" : `Tweak ${e.label}`,
+                            "data-key": `edit-${e.id}`,
+                            onclick: () => {
+                              railUi.open = open ? null : e.id;
+                              rerender();
+                            },
+                          },
+                          shortLabel(e.target),
+                        ),
+                        h("span", { class: "edit-val" }, editValueText(e)),
+                        h("button", { class: "btn btn-quiet btn-sm", type: "button", "data-key": `undo-${e.id}`, onclick: () => S.undo(e.id) }, "Undo"),
+                        e.note ? h("span", { class: "edit-why" }, e.note) : null,
+                        open ? editTweaker(e) : null,
+                      );
+                    }),
+                  ),
+            );
+          }),
         )
       : h(
           "div",
@@ -224,6 +383,8 @@ export function renderRail(el, { askAgain = true } = {}) {
       ),
     ),
   );
+  // a rebuild replaces the focused control: put focus back on its twin
+  restoreRailFocus(el);
 }
 
 function saveRecipe() {
@@ -408,18 +569,49 @@ function place(pop, anchor) {
 
 // The edit popover: Off, a log slider from off to x16, Boost x2, Noise, Reset.
 // Changes apply to the weights immediately; the reply changes when you ask again.
+// The scale slider (log2, off to ×16, track painted in the edit colours), as the
+// popover and the rail's tweaker both use it. `onInput` follows the drag;
+// `onChange` fires when it's let go (or on each key step).
+function scaleSlider({ value = 1, key = null, onInput = null, onChange }) {
+  const input = h("input", {
+    type: "range",
+    min: SLIDER.min,
+    max: SLIDER.max,
+    step: SLIDER.step,
+    value: value === 1 ? 0 : valueToSlider(value),
+    "aria-label": "Scale",
+    "data-key": key,
+  });
+  const say = (v) => input.setAttribute("aria-valuetext", v === 0 ? "off" : `times ${v}`);
+  say(value);
+  input.addEventListener("input", () => {
+    const v = sliderToValue(input.value);
+    say(v);
+    onInput?.(v);
+  });
+  input.addEventListener("change", () => onChange(sliderToValue(input.value)));
+  const el = h(
+    "div",
+    { class: "scale-slider" },
+    input,
+    h(
+      "div",
+      { class: "ticks", "aria-hidden": "true" },
+      ["off", "", "×¼", "", "×1", "", "×4", "", "×16"].map((t, i) => h("span", { class: i === 4 ? "mid" : null }, t)),
+    ),
+  );
+  return { el, input };
+}
+
 export function openEditPopover(anchor, { target, title, sub, info, note, says, trace, sign = 1, extra = null, onClose = null }) {
   closePopover();
   onPopClose = onClose;
   const current = () => S.editFor(target, "scale");
   const noise = () => S.editFor(target, "noise");
   const readout = h("span", { class: "readout", "aria-live": "polite" });
-  const slider = h("input", {
-    type: "range",
-    min: SLIDER.min,
-    max: SLIDER.max,
-    step: SLIDER.step,
-    "aria-label": "Scale",
+  const { el: sliderEl, input: slider } = scaleSlider({
+    onInput: (v) => (readout.textContent = fmtScale(v)),
+    onChange: (v) => setValue(v),
   });
   const offBtn = h("button", { class: "btn", type: "button" }, "Off");
   const sync = () => {
@@ -435,12 +627,6 @@ export function openEditPopover(anchor, { target, title, sub, info, note, says, 
     offBtn.setAttribute("aria-pressed", String(v === 0));
     S.setScale(target, v, note).then(sync);
   };
-  slider.addEventListener("input", () => {
-    const v = sliderToValue(slider.value);
-    slider.setAttribute("aria-valuetext", v === 0 ? "off" : `times ${v}`);
-    readout.textContent = fmtScale(v);
-  });
-  slider.addEventListener("change", () => setValue(sliderToValue(slider.value)));
   offBtn.addEventListener("click", () => setValue(current()?.value === 0 ? 1 : 0));
   const noiseBtn = h("button", {
     class: "btn btn-quiet",
@@ -478,16 +664,7 @@ export function openEditPopover(anchor, { target, title, sub, info, note, says, 
     traceEl,
     saysEl,
     extra,
-    h(
-      "div",
-      { class: "scale-slider" },
-      slider,
-      h(
-        "div",
-        { class: "ticks", "aria-hidden": "true" },
-        ["off", "", "×¼", "", "×1", "", "×4", "", "×16"].map((t, i) => h("span", { class: i === 4 ? "mid" : null }, t)),
-      ),
-    ),
+    sliderEl,
     h(
       "div",
       { class: "popover-actions" },

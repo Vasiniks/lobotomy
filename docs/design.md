@@ -124,16 +124,26 @@ Everything under "Screen" above is built, plus the following:
 - **Full recordings are kept up to 8 replies and 2 GB together,** newest first,
   and the newest always. A 512-token reply records 0.1–0.2 GB, but a 2,048-token
   thinking reply on the 2B records about 1 GB.
+- **The edits rail groups edits by what they change** (2026-11-08): neurons,
+  heads, layers, tokens, raw weights, each in layer order and foldable. A row
+  opens into a tweaker (the popover's scale slider, quick values, noise
+  strengths). Tweaking keeps the edit's place and seed, and ×1 keeps the edit
+  (it does nothing) so the row doesn't vanish under the pointer; Undo removes
+  it.
 - **The top bar names the model by its file** (2026-11-08). A fine-tune like
   magi-1.2-2B carries its base model's name inside the GGUF ("Qwen3.5-2B"),
   so that name is shown beside the file name when the file name doesn't
   include it.
 
-### The 3D layer stack (2026-11-07, first build; the look is still open)
+### The 3D layer stack (built 2026-11-07; look redesigned 2026-11-08 as "Prisms")
 
 The user chose stacked sheets from three shapes mocked up with real data, and
-asked for a timeline, moving lines and thicker lines for harder firing. These
-are the calls made while building it:
+asked for a timeline, moving lines and thicker lines for harder firing. On
+2026-11-08 they called the neurons, sheets and sliders "horrible"; a design
+prototype offered Plates (glass plates, neurons rising as columns) and
+Filament (a dark stage, neurons as points of light). They liked Filament for
+being less cluttered and Plates for its columns, and approved the combination,
+Prisms. These are the calls made while building it:
 
 - **It replaces the strips by default,** with a 3D / Activity / Lens switch, so
   the 2D strips, the lens and the cut cost are one click away.
@@ -141,58 +151,69 @@ are the calls made while building it:
   over the last prompt token (it wrote the first word); each step "reads" one
   token and "says" the next. Layers above the playhead keep the previous word,
   dimmed, since that is the model's state mid-pass.
-- **Lines go to each layer's 48 strongest neurons** (the replay carries the
-  top 96 per layer and word; the live stream the top 32). Strength is the size
-  of the activation against the layer's 99.9th percentile over the reply, the
-  same reference the "why" ranking uses. Lines start at the line through the
-  sheets, because every neuron reads from and writes to that residual stream.
+- **The look (Prisms):** a dark stage in both themes, because emitted light
+  needs a dark well. A sheet is a faint lattice of its neurons (64 columns,
+  so 64 × 56 for the 0.8B and 64 × 96 for the 2B, like the 2D layer view),
+  marked at its corners; attention layers get a full frame, and a line of light
+  reads across a sheet as the word arrives.
+- **Firing neurons rise as columns of light,** taller and brighter for harder
+  firing, with a bright cap. To keep the tower calm, columns stand tall only on
+  the word's layer (and any hovered, selected or pulled-out layer); behind the
+  word they settle into small lit tiles, the previous word glows at 30% and the
+  one before at 10%, and layers the word hasn't reached stay dim. So a column's
+  height is activation × nearness to the word; pulling a layer out shows its
+  columns at full height.
+- **Lines are arcs of light to each layer's 48 strongest neurons** (the replay
+  carries the top 96 per layer and word; the live stream the top 32), ending on
+  the column caps, with comets running out; thicker for stronger. Strength is
+  the size of the activation against the layer's 99.9th percentile over the
+  reply, the same reference the "why" ranking uses.
 - **Live while it writes, replay afterwards.** At about 50 words a second the
   live view is a light show; the timeline then swaps in the full data, paused at
   the end. Play starts from the top. 1× takes 1.5 s per word; ¼× to 8×.
 - **Keys:** Space plays or pauses, ← → step one layer, Shift ← → one word.
 - **A clicked neuron opens the same editor as the layer view,** and lights the
-  timeline by that neuron's activity (where it fired). Edited neurons are drawn
-  whole in their edit colour (blue for turned down, orange for boosted, a ring
-  cut through for off), larger than the rest and undimmed, so edits show from
-  anywhere in the tower. When an edit lands or changes, the neuron flashes and
-  swells and a ripple in its colour spreads from it. Whole-layer edits tint the
-  sheet. With reduced motion there is no flash or ripple.
-- **Heads are tiles along each sheet's far edge,** height and lightness by the
-  head's output size against the layer's 99th percentile over the reply, with
-  their own lines from the middle. A pulled-out layer's heads are clickable
-  and open the head editor.
+  timeline by that neuron's activity (where it fired). Edited neurons get a
+  square ring in their edit colour (blue for turned down, orange for boosted,
+  cut through for off; a dashed neutral ring for noise) and their column takes
+  that colour, undimmed, so edits show from anywhere in the tower. When an edit
+  lands or changes, the neuron flashes and a ripple in its colour spreads
+  across the sheet. Whole-layer edits tint the sheet. With reduced motion there
+  is no flash or ripple.
+- **Heads are bars along each sheet's far edge,** height and lightness by the
+  head's output size against the layer's 99th percentile over the reply. An
+  edited head takes its edit colour, and a head switched off lies flat. A
+  pulled-out layer's heads are clickable and open the head editor.
 - **Wiring is read from the healthy weights,** like "pushes up": the 4
-  strongest connections into every later layer, up[m] · ((1 + g) ⊙ d).
-  Solid lines boost and dashed lines suppress (sign flipped when the neuron
-  fired negative at that word). The popover lists the strongest six; clicking
-  one pulls out that layer and opens that neuron.
-- **Word probabilities:** a *Next word* card (top left, clear of the layer
-  labels; top right while a sheet is pulled out) lists the 5
-  candidates the model weighed, with the model's own probabilities (before
-  temperature, top-k and top-p; the readout uses the same number). Beside
-  each layer, once the word has reached it: that layer's best guess (logit
-  lens) and a bar for the probability it already gave the word that came.
-  Fetched per step from `GET /api/replies/{id}/guess/{row}`.
-- **Hovering an edit** in the rail puts a beacon on it in the tower: a line
-  from the neuron, head tile or sheet up out of the top, in the edit's
-  colour, with its label.
-- **View controls sit on the stage, open by default:** *↔ Within a layer*
-  (neuron spacing, horizontal), *↕ Between layers* (layer spacing, vertical),
-  neuron size, *Fit to screen*, *Full window* and *Reset*, remembered per
-  browser. The user asked for horizontal and vertical scaling and for the
-  structure to fill the screen.
-- **Fit to screen:** the camera keeps its three-quarter view from above and
-  moves so the whole tower fills 90% of the stage, leaving room for the view
-  controls on the left and the layer labels on the right. It fits on open,
-  on resize and while you drag the sliders, until you orbit or zoom yourself;
-  *Fit to screen* hands it back. A pulled-out sheet fills about 85% of the
-  stage, and the view controls step aside for it.
+  strongest connections into every later layer, up[m] · ((1 + g) ⊙ d), drawn
+  to small rings on the target neurons. Solid lines boost and dashed lines
+  suppress (sign flipped when the neuron fired negative at that word). The
+  popover lists the strongest six; clicking one pulls out that layer and opens
+  that neuron.
+- **Word probabilities:** a *Next word* card lists the 5 candidates the model
+  weighed, with the model's own probabilities (before temperature, top-k and
+  top-p). Beside the tower, one aligned column of layer labels with leader
+  lines; each shows that layer's best guess (logit lens) once the word has
+  reached it, and the probability it already gave the word that came. When
+  the layers sit tight the column thins out, always keeping the word's layer,
+  the hovered one, the top one and layer-edited ones. Clicking a label pulls
+  that layer out. Fetched per step from `GET /api/replies/{id}/guess/{row}`.
+- **Each word in the timeline carries 24 tiny bars:** how much probability
+  each layer already gave that word (the lens grid, one call per reply). They
+  appear once the reply has landed.
+- **Hovering an edit** in the rail puts a beacon on it in the tower, in the
+  edit's colour, with its label.
+- **View controls sit on the stage, open by default,** as custom cell-strip
+  sliders rather than browser range inputs: *Within a layer* (neuron
+  spacing), *Between layers* (layer spacing), *Neuron size*, plus *Ride with
+  the word* (the camera rises with the word, close in), *Afterglow*, *Fit*,
+  *Full window* and *Reset*, remembered per browser.
+- **Fit:** the camera keeps its three-quarter view from above and moves so the
+  whole tower fills 90% of the stage. It fits on open and on resize until you
+  orbit or zoom yourself; *Fit* hands it back. A pulled-out sheet fills most
+  of the stage.
 - **Full window** (button or F, Esc to leave) lays the 3D view over the whole
   page, timeline included.
-- **Atmosphere:** the stage darkens towards its edges (`--surface-deep`), and
-  neurons that fire hard glow softly. The glow ignores depth, so the tower
-  reads as lit from inside, and fades towards the back. Defaults are layers
-  0.16 apart and neurons 0.044 wide, larger than the first build.
 - **Attention is drawn into the timeline:** when the playhead (or a pulled-out
   layer) is on an attention layer and paused, lines run from the sheet, or from
   a clicked head, down to the words it looked at most. "Your message" collects

@@ -231,7 +231,7 @@ export function renderStack(section) {
       "p",
       { class: "meta" },
       is3d
-        ? "Every word climbs the 24 layers. Lines reach out to the neurons that fired on it, thicker for harder firing; beside each layer, its best guess for the next word so far. Click a layer to pull it out, then a neuron to edit it."
+        ? `Every word climbs the ${state.model?.n_layers ?? 24} layers. On the layer it has reached, the neurons that fired rise as columns of light, taller for harder firing, and settle as it climbs on; beside each layer, its best guess for the next word so far. Click a layer to pull it out, then a neuron to edit it.`
         : lensMode
         ? "Logit lens: one cell per word of the last reply. The brighter the cell, the more sure that layer already was of the word that came next (read through the final norm and unembedding). Watch where the answer appears."
         : "One strip per layer, one cell per token of the last reply. The brighter the cell, the harder that layer fired on that token, against its own usual range. Open a strip to edit it.",

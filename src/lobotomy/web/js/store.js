@@ -283,6 +283,26 @@ export async function addNoise(target, std, note = "") {
   editsChanged();
 }
 
+// Change one edit in place (the rail's tweaker): it keeps its place, note and
+// seed. Unlike setScale, ×1 keeps the edit (it just has no effect), so the row
+// being tweaked doesn't vanish under the pointer. Undo removes it.
+export function tweak(id, value) {
+  chain = chain
+    .then(async () => {
+      const e = state.edits.find((x) => x.id === id);
+      if (!e || e.value === value) return;
+      state.edits = (await guard(api.updateEdit(id, value))).edits;
+      editsChanged();
+    })
+    .catch(() => {});
+  return chain;
+}
+
+export async function undoMany(ids) {
+  for (const id of ids) state.edits = (await guard(api.removeEdit(id))).edits;
+  editsChanged();
+}
+
 export async function addMany(edits) {
   state.edits = (await guard(api.addEdits(edits))).edits;
   editsChanged();

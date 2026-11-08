@@ -3,7 +3,7 @@
 Break a small language model on purpose, live, while you chat with it, and see
 inside it to choose what to break.
 
-![The 3D view in full window: 24 layers of neurons, the word "is" climbing through them, layer 20 already guessing "Canberra" at 92%](docs/screenshots/3d-full.png)
+![The 3D view in full window: the word "is" has climbed to layer 20, where the neurons that fired stand as columns of light; layer 20 already guesses "Canberra" at 93%](docs/screenshots/3d-full.png)
 
 You chat with the model and watch every word climb through its 24 layers.
 Find the neurons, heads or layers that matter, switch them off, turn them
@@ -75,32 +75,39 @@ model, and lobotomy doesn't undo that yet.
 
 ### Watch it think (3D)
 
-![The app: the chat, the 3D layers with each layer's guess and the next-word card, the edits rail](docs/screenshots/3d.png)
+![The app: the chat, the 3D layers with each layer's guess and the next-word card, and the edits rail grouped into neurons, heads and layers](docs/screenshots/3d.png)
 
-- **The tower.** The 24 layers are stacked sheets of 3,584 neurons each. Every
-  word the model writes climbs through them. At each layer, lines reach out to
-  the neurons that fired, thicker for harder firing, and the hardest ones glow.
-  While the model writes, the tower lights up live.
+- **The tower.** The 24 layers are stacked sheets of neurons (3,584 each on
+  the 0.8B, 6,144 on the 2B), faint lattices on a dark stage; attention layers
+  get a full frame. Every word the model writes climbs through them. On the
+  layer the word has reached, the neurons that fired rise as columns of light,
+  taller for harder firing, with arcs reaching out to them; behind the word
+  they settle into small lit tiles, so the tower stays readable. While the
+  model writes, the tower lights up live.
 - **The timeline** underneath plays, pauses and steps through the reply: a word
   is a big step, a layer is a small one.
 - **Where the answer comes from.** The *Next word* card lists the 5 words the
   model weighed, with its own probabilities. Beside each layer is that layer's
   best guess so far (the logit lens), so you can watch the answer form as the
-  word climbs. In the screenshot, "Canberra" first appears at layer 20, at 92%.
+  word climbs. In the screenshot, "Canberra" first appears at layer 20, at 93%.
 - **Pull a layer out.** Click a sheet and it comes forward, facing you. Click a
   neuron to edit it. The timeline then lights up wherever that neuron fired, and
   lines run to the later neurons it feeds (solid boosts, dashed suppresses).
   The heads are the tiles along each sheet's far edge. On an attention layer,
   lines run down into the timeline to the words it looked at.
-- **Your edits show in the tower.** Edited neurons take their edit's colour:
-  blue for turned down, orange for boosted, a cut ring for off. They flash and
-  ripple when you change them, and whole-layer edits tint the sheet. Point at
-  an edit in the edits rail and a beacon rises from it.
-- **View controls** on the stage: *↔ Within a layer* spreads the neurons
-  apart, *↕ Between layers* spreads the layers, and *Neuron size* sets how big
-  each neuron is drawn. *Fit to screen* frames the whole tower at 90% of the
-  view (it does this on its own until you orbit or zoom). *Full window* (F)
-  gives the tower the whole page.
+- **Your edits show in the tower.** Edited neurons get a square ring in their
+  edit's colour, and their column takes it: blue for turned down, orange for
+  boosted, cut through for off. They flash and ripple when you change them,
+  and whole-layer edits tint the sheet. Point at an edit in the edits rail and
+  a beacon rises from it.
+- **View controls** on the stage: *Within a layer* spreads the neurons apart,
+  *Between layers* spreads the layers, and *Neuron size* sets how big each
+  neuron is drawn. *Ride with the word* moves the camera up with the word,
+  close in; *Afterglow* keeps the last words faintly lit. *Fit* frames the
+  whole tower at 90% of the view (it does this on its own until you orbit or
+  zoom). *Full window* (F) gives the tower the whole page.
+- **Each word in the timeline** carries 24 tiny bars: how sure each layer
+  already was of that word.
 - The 3D / Activity / Lens switch brings back the 2D strips.
 
 ### Break it
@@ -108,8 +115,11 @@ model, and lobotomy doesn't undo that yet.
 - **Edits.** Neurons, heads, whole layers (or just a layer's mixer or MLP), and
   token embeddings. Each can be switched off, scaled on a log slider from ×1/16
   to ×16, boosted, or given noise.
-- **The edits rail** lists every edit with a note on why you made it. Undo any
-  one, go back to healthy, or save and load the set as a JSON recipe.
+- **The edits rail** sorts every edit into neurons, heads, layers, tokens and
+  raw weights, each group foldable and in layer order, with the note on why
+  you made it. Click an edit to tweak it in place: the scale slider from off
+  to ×16, quick values, or the noise strength. Undo one or a whole group, go
+  back to healthy, or save and load the set as a JSON recipe.
 - **The damage meter** in the top bar shows how far the edited model is from
   the healthy one (KL divergence on the latest reply), live while you edit.
 - **Presets** are one-click starting points:

@@ -60,7 +60,7 @@ S.subscribe(render);
 // Keyboard: "/" focuses the message box, Cmd/Ctrl+Z undoes the last edit,
 // Cmd/Ctrl+Enter asks again.
 document.addEventListener("keydown", (e) => {
-  const typing = e.target.closest("input, textarea");
+  const typing = e.target instanceof Element && e.target.closest("input, textarea");
   const mod = e.metaKey || e.ctrlKey;
   if (e.key === "/" && !typing) {
     const ta = document.getElementById("ask");
