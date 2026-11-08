@@ -98,6 +98,7 @@
   color-scheme: dark;
 
   --surface-well:   #0e1714;  /* oklch(0.195 0.015 168) data wells: grid, strips */
+  --surface-deep:   #070d0b;  /* oklch(0.150 0.013 168) the 3D stage's edges */
   --surface-ground: #141e1a;  /* oklch(0.225 0.017 168) app canvas */
   --surface-panel:  #1a2420;  /* oklch(0.250 0.017 168) side panes, bars */
   --surface-raised: #232e2a;  /* oklch(0.290 0.017 168) popovers, hovered rows */
@@ -162,6 +163,7 @@
   color-scheme: light;
 
   --surface-well:   #e0e9e3;  /* oklch(0.925 0.012 155) */
+  --surface-deep:   #cfd9d3;  /* oklch(0.880 0.013 155) */
   --surface-ground: #e9f1eb;  /* oklch(0.950 0.011 155) */
   --surface-panel:  #f5faf7;  /* oklch(0.980 0.006 155) */
   --surface-raised: #fcfefc;  /* oklch(0.995 0.003 155) */

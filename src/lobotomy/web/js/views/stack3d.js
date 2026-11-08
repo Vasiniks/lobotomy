@@ -20,9 +20,13 @@ import { fmt, h, quoteTok, showToken, svgNS } from "../util.js";
 
 const SP = 0.03; // neuron spacing the sheet geometry is built at (the View sliders rescale it)
 const COLS = 64;
-// what the View sliders change; remembered per browser
-const LAYOUT = { gap: 0.22, sp: 0.03, size: 0.036 };
-const LAYOUT_KEY = "lobotomy-3d-layout";
+// what the View sliders change; remembered per browser. sp spreads the neurons
+// within a layer (horizontal), gap spreads the layers (vertical).
+const LAYOUT = { gap: 0.16, sp: 0.03, size: 0.044, open: true };
+const LAYOUT_KEY = "lobotomy-3d-layout-v2"; // v2: bigger neurons, so older saved sizes don't stick
+const FIT = 0.9; // "Fit to screen": the tower fills 90% of the stage
+const SPINE_PAD = 0.45; // how far the word's line runs below the first layer and above the last
+const LABEL_ROOM = 190; // px kept free right of the tower for the layer labels
 function loadLayout() {
   try {
     const v = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "null");
@@ -130,51 +134,88 @@ function editCode(e) {
 }
 
 const POINT_VS = /* glsl */ `
-  attribute float act;   // 0..1, how hard it fired against its layer's usual range
-  attribute float birth; // when it lit up, for the pop
-  attribute float edit;  // editCode
+  attribute float act;    // 0..1, how hard it fired against its layer's usual range
+  attribute float birth;  // when it lit up, for the pop
+  attribute float edit;   // editCode
+  attribute float editAt; // when you last changed its edit, for the flash
   uniform float uScale, uSize, uTime, uMotion, uFogNear, uFogFar;
-  varying float vAct, vEdit, vFog;
+  varying float vAct, vEdit, vFog, vFlash;
   void main() {
     vAct = act;
     vEdit = edit;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mv;
     vFog = smoothstep(uFogNear, uFogFar, -mv.z); // the far side of the tower recedes
     float pop = 1.0 + 1.4 * act * exp(-max(0.0, uTime - birth) * 5.0) * uMotion;
     float breathe = 1.0 + 0.14 * act * sin(uTime * 3.5 + position.x * 41.0 + position.z * 29.0) * uMotion;
-    float s = (0.55 + 1.6 * act) * pop * breathe;
-    if (edit > 0.5) s = max(s, 1.5);
+    float s = (0.6 + 1.5 * act) * pop * breathe;
+    vFlash = uTime >= editAt ? exp(-(uTime - editAt) * 2.2) * uMotion : 0.0;
+    if (edit > 0.5) s = max(s, 2.1) * (1.0 + 0.12 * sin(uTime * 2.4) * uMotion);
+    s *= 1.0 + 2.2 * vFlash;
     gl_PointSize = max(1.0, uSize * s * uScale / -mv.z);
+    // A sprite is flat at one depth but its sheet is tilted, so the sheet's own neurons
+    // would slice a big disc in half. Draw it a radius closer along the line of sight
+    // (same spot on screen) so it sits on top of its sheet.
+    float lift = uSize * s * 0.6;
+    gl_Position = projectionMatrix * vec4(mv.xyz * (1.0 - lift / length(mv.xyz)), 1.0);
   }`;
 const POINT_FS = /* glsl */ `
   uniform sampler2D uRamp, uEdits;
   uniform vec3 uBg;
   uniform float uDim;
-  varying float vAct, vEdit, vFog;
+  varying float vAct, vEdit, vFog, vFlash;
   vec3 ramp(float a) { return texture2D(uRamp, vec2((clamp(a, 0.0, 1.0) * 8.0 + 0.5) / 16.0, 0.5)).rgb; }
   void main() {
     vec2 d = gl_PointCoord - 0.5;
     float r2 = dot(d, d);
     if (r2 > 0.25) discard;
     vec3 c = ramp(0.05 + 0.95 * vAct);
+    float dim = uDim;
+    float fog = vFog * 0.6;
     if (vEdit > 0.5) {
-      vec3 e = texture2D(uEdits, vec2((vEdit + 0.5) / 16.0, 0.5)).rgb;
-      if (vEdit > 8.5 && vEdit < 9.5) {
-        // off: a ring cut through, like the cut on the 2D cells
-        if (r2 < 0.08 || abs(d.y) < 0.075) discard;
-        c = e;
-      } else if (r2 > 0.1) {
-        c = e; // the ring is you, the fill is the model
-      }
+      // your edits are drawn in their edit colour, whole, and stay bright when the layer is dimmed
+      c = texture2D(uEdits, vec2((vEdit + 0.5) / 16.0, 0.5)).rgb;
+      if (vEdit > 8.5 && vEdit < 9.5 && (r2 < 0.07 || abs(d.x + d.y) < 0.06)) discard; // off: a ring, cut through
+      dim = max(dim, 0.9);
+      fog *= 0.3;
     }
-    gl_FragColor = vec4(mix(mix(uBg, c, uDim), uBg, vFog * 0.6), 1.0);
+    if (vFlash > 0.01 && r2 > 0.17) c = mix(c, ramp(1.0), vFlash); // a bright rim as it changes
+    gl_FragColor = vec4(mix(mix(uBg, c, dim), uBg, fog), 1.0);
+  }`;
+
+// a soft glow around neurons that fire hard, and around your edits
+const GLOW_VS = /* glsl */ `
+  attribute float act, birth, edit, editAt;
+  uniform float uScale, uSize, uTime, uMotion, uFogNear, uFogFar;
+  varying float vA, vEdit;
+  void main() {
+    float flash = uTime >= editAt ? exp(-(uTime - editAt) * 2.2) * uMotion : 0.0;
+    float a = edit > 0.5 ? 0.55 + flash : smoothstep(0.4, 1.0, act);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    a *= 1.0 - 0.75 * smoothstep(uFogNear, uFogFar, -mv.z); // the back of the tower glows less
+    vA = a;
+    vEdit = edit;
+    gl_Position = projectionMatrix * mv;
+    if (a < 0.01) { gl_PointSize = 0.0; gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+    float pop = 1.0 + 0.8 * exp(-max(0.0, uTime - birth) * 4.0) * uMotion;
+    gl_PointSize = uSize * (3.2 + 3.0 * a) * pop * (1.0 + 1.5 * flash) * uScale / -mv.z;
+  }`;
+const GLOW_FS = /* glsl */ `
+  uniform sampler2D uRamp, uEdits;
+  uniform float uDim, uGlow;
+  varying float vA, vEdit;
+  void main() {
+    float r = length(gl_PointCoord - 0.5) * 2.0;
+    if (r > 1.0) discard;
+    float f = (1.0 - r) * (1.0 - r);
+    vec3 c = vEdit > 0.5 ? texture2D(uEdits, vec2((vEdit + 0.5) / 16.0, 0.5)).rgb : texture2D(uRamp, vec2(8.5 / 16.0, 0.5)).rgb;
+    float dim = vEdit > 0.5 ? max(uDim, 0.9) : uDim;
+    gl_FragColor = vec4(c, f * min(1.0, vA) * uGlow * dim);
   }`;
 
 const LINE_VS = /* glsl */ `
   attribute vec3 aEnd;
   attribute float aStrength, aBirth;
-  uniform float uTime, uGrow, uFogNear, uFogFar;
+  uniform float uTime, uGrow, uFogNear, uFogFar, uSize;
   varying float vY, vS, vFog;
   void main() {
     float g = clamp((uTime - aBirth) / uGrow, 0.0, 1.0);
@@ -184,7 +225,9 @@ const LINE_VS = /* glsl */ `
     vec3 up = vec3(0.0, 1.0, 0.0);
     vec3 side = normalize(cross(ax, up));
     float r = mix(0.0012, 0.0115, aStrength);
-    vec3 p = ax * (position.y * len * g) + side * (position.x * r) + up * (position.z * r);
+    // stop at the neuron's rim, so the line doesn't cut into the lit disc
+    float reach = max(0.0, len - uSize * (0.3 + 0.75 * aStrength));
+    vec3 p = ax * (position.y * reach * g) + side * (position.x * r) + up * (position.z * r);
     vY = position.y * g;
     vS = aStrength;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -340,6 +383,7 @@ function build() {
     uSize: { value: LAYOUT.size },
     uFogNear: { value: 8 },
     uFogFar: { value: 20 },
+    uGlow: { value: glowStrength(colours) },
   };
 
   // the neurons' places on a sheet (row-major, like the 2D grid)
@@ -365,10 +409,12 @@ function build() {
     const act = new Float32Array(N);
     const birth = new Float32Array(N).fill(-100);
     const edit = new Float32Array(N);
+    const editAt = new Float32Array(N).fill(-100);
     const attrs = {
       act: new THREE.BufferAttribute(act, 1).setUsage(THREE.DynamicDrawUsage),
       birth: new THREE.BufferAttribute(birth, 1).setUsage(THREE.DynamicDrawUsage),
       edit: new THREE.BufferAttribute(edit, 1).setUsage(THREE.DynamicDrawUsage),
+      editAt: new THREE.BufferAttribute(editAt, 1).setUsage(THREE.DynamicDrawUsage),
     };
     for (const [k, a] of Object.entries(attrs)) geo.setAttribute(k, a);
     geo.computeBoundingSphere();
@@ -378,12 +424,25 @@ function build() {
       fragmentShader: POINT_FS,
     });
     const points = new THREE.Points(geo, pmat);
+    const gmat = new THREE.ShaderMaterial({
+      uniforms: { ...uni, uDim: { value: 1 } },
+      vertexShader: GLOW_VS,
+      fragmentShader: GLOW_FS,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false, // light, not a surface: it shows through the sheets, softly
+    });
+    const glow = new THREE.Points(geo, gmat);
+    glow.renderOrder = 1;
 
     const plate = new THREE.Mesh(plateGeo, new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide }));
     plate.userData.layer = l;
     const attn = m.layers[l]?.type === "attention";
     const baseEdge = colour(attn ? colours.ruleStrong : colours.rule);
     const edge = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: baseEdge.clone(), transparent: true }));
+    // a whole-layer edit tints the sheet in its edit colour
+    const tint = new THREE.Mesh(plateGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
+    tint.visible = false;
 
     const lgeo = new THREE.InstancedBufferGeometry();
     lgeo.index = lineGeo.index;
@@ -413,7 +472,7 @@ function build() {
     heads.userData.layer = l;
     const hl = lineMesh(Math.max(1, nH), uni);
 
-    g.add(points, plate, edge, lines, heads, hl.mesh);
+    g.add(points, glow, plate, tint, edge, lines, heads, hl.mesh);
     world.add(g);
     // the label: layer number, then (once the word reaches it) this layer's best
     // guess for the next word, and a bar for how sure it already was of the real one
@@ -426,7 +485,10 @@ function build() {
       l,
       g,
       points,
+      glow,
+      gmat,
       plate,
+      tint,
       edge,
       baseEdge,
       lines,
@@ -434,6 +496,7 @@ function build() {
       act,
       birth,
       edit,
+      editAt,
       attrs,
       aEnd,
       aStrength,
@@ -460,8 +523,8 @@ function build() {
   }
 
   // the line every word travels along
-  const y0 = layers[0].home.pos.y - 0.7;
-  const y1 = layers[L - 1].home.pos.y + 0.7;
+  const y0 = layers[0].home.pos.y - SPINE_PAD;
+  const y1 = layers[L - 1].home.pos.y + SPINE_PAD;
   const H = y1 - y0;
   const spineMat = new THREE.ShaderMaterial({
     uniforms: { ...uni, uH: { value: H }, uProgress: { value: 0 }, uIdle: { value: rawVec3(colours.ruleStrong) } },
@@ -530,23 +593,35 @@ function build() {
   cand.hidden = true;
   stage.append(cand);
 
-  // view controls: spread the layers or the neurons, neuron size
-  const viewPanel = h("div", { class: "s3d-viewpanel" });
-  viewPanel.hidden = true;
+  // view controls: spread the neurons (within a layer) or the layers, neuron size,
+  // fit to screen, full window. Open by default; the View button folds them away.
+  const viewPanel = h("div", { class: "s3d-viewpanel", id: "s3d-viewpanel" });
   const viewBtn = h(
     "button",
     {
       class: "btn btn-quiet btn-sm s3d-viewbtn",
       type: "button",
-      "aria-expanded": "false",
+      "aria-controls": "s3d-viewpanel",
       onclick: () => {
-        viewPanel.hidden = !viewPanel.hidden;
-        viewBtn.setAttribute("aria-expanded", String(!viewPanel.hidden));
+        V.layout.open = viewPanel.hidden;
+        saveLayout();
+        showViewPanel();
+        if (!V.userMoved && V.sep === null) fitCamera(true); // the panel's room changed
       },
     },
     "View",
   );
+  const fullBtn = h("button", { class: "btn btn-quiet btn-sm", type: "button", title: "The 3D view fills the window (F)", onclick: () => setFull(!V.full) }, "Full window");
   stage.append(h("div", { class: "s3d-view" }, viewPanel, viewBtn));
+
+  // ripples: where an edit just landed
+  const rippleGeo = new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2);
+  const ripples = Array.from({ length: 16 }, () => {
+    const r = new THREE.Mesh(rippleGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
+    r.renderOrder = 12;
+    r.userData = { born: -100, r0: 0, r1: 0 };
+    return r;
+  });
 
   // an edit you hover in the edits rail: a beacon from it up out of the tower
   const beaconMat = new THREE.MeshBasicMaterial({ color: colour(colours.ink1), depthTest: false, transparent: true });
@@ -600,6 +675,11 @@ function build() {
     cols: makeCols(colours),
     cand,
     viewPanel,
+    viewBtn,
+    fullBtn,
+    full: false,
+    userMoved: false, // the camera stops fitting itself once you orbit or zoom
+    ripples,
     beacon,
     beaconRing,
     beaconPlate,
@@ -653,6 +733,52 @@ function build() {
   return view;
 }
 
+// Glow reads as light on the dark theme and as a soft shadow on paper, so paper gets less.
+function glowStrength(c) {
+  const n = colour(c.well).getHex();
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum > 0.5 ? 0.14 : 0.36;
+}
+
+function showViewPanel() {
+  V.viewPanel.hidden = !V.layout.open;
+  V.viewBtn.setAttribute("aria-expanded", String(!!V.layout.open));
+  V.viewBtn.textContent = V.layout.open ? "Hide view controls" : "View";
+}
+
+// Full window: the 3D view covers the whole page; Esc or F brings it back.
+function setFull(on) {
+  V.full = on;
+  V.root.classList.toggle("is-full", on);
+  V.fullBtn.textContent = on ? "Exit full window" : "Full window";
+  V.userMoved = false; // a new size: fit again
+  closePopover();
+  V.canvas.focus({ preventScroll: true });
+}
+
+function spawnRipple(Ly, x, z, code, r0, r1) {
+  if (!V.uni.uMotion.value) return;
+  const r = V.ripples.find((m) => !m.parent) || V.ripples.reduce((a, b) => (a.userData.born < b.userData.born ? a : b));
+  r.material.color.copy(V.cols.edit[code] || V.cols.ramp[8]);
+  r.position.set(x, 0.006, z);
+  r.userData = { born: V.uni.uTime.value, r0, r1 };
+  Ly.g.add(r);
+}
+
+function updateRipples(t) {
+  for (const r of V.ripples) {
+    if (!r.parent) continue;
+    const u = (t - r.userData.born) / 0.9;
+    if (u >= 1) {
+      r.removeFromParent();
+      continue;
+    }
+    const e = 1 - (1 - u) * (1 - u);
+    r.scale.setScalar(r.userData.r0 + (r.userData.r1 - r.userData.r0) * e);
+    r.material.opacity = (1 - u) * (1 - u);
+  }
+}
+
 function recolour() {
   const c = readColours();
   V.uni.uRamp.value.dispose();
@@ -660,6 +786,7 @@ function recolour() {
   V.uni.uEdits.value.dispose();
   V.uni.uEdits.value = paletteTexture(editPalette(c), 16);
   V.uni.uBg.value = rawVec3(c.well);
+  V.uni.uGlow.value = glowStrength(c);
   V.spineMat.uniforms.uIdle.value = rawVec3(c.ruleStrong);
   V.ball.material.color = colour(c.act[8]);
   V.halo.material.color = colour(c.act[8]);
@@ -667,6 +794,7 @@ function recolour() {
   for (const Ly of V.layers) Ly.baseEdge = colour(Ly.kind === "attention" ? c.ruleStrong : c.rule);
   V.hotEdge = colour(c.ink2);
   V.editSig = null; // re-read the edit colours
+  V.quietEdits = true; // ...without flashing them as if they were new
   V.cols = makeCols(c);
   V.wire.material.uniforms.uBoost.value = rawVec3(c.ink1);
   V.wire.material.uniforms.uSuppress.value = rawVec3(c.ink2);
@@ -681,6 +809,7 @@ function resize() {
   V.camera.aspect = r.width / r.height;
   V.camera.updateProjectionMatrix();
   V.uni.uScale.value = V.renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(V.camera.fov) / 2));
+  if (!V.userMoved && V.sep === null) fitCamera(V.fitView != null); // the first fit jumps, later ones glide
 }
 
 // --- data ------------------------------------------------------------------------------------
@@ -957,7 +1086,11 @@ function step(layers) {
 function syncEdits() {
   const sig = S.editSignature(state.edits);
   if (sig === V.editSig) return;
+  // flash what changed, but not on the first look or a theme change
+  const flash = V.editSig !== null && !V.quietEdits;
   V.editSig = sig;
+  V.quietEdits = false;
+  const before = flash ? V.layers.map((Ly) => ({ edit: Ly.edit.slice(), head: Ly.headEdit.slice(), layer: Ly.layerEdit ? editCode(Ly.layerEdit) : 0 })) : null;
   for (const Ly of V.layers) {
     Ly.edit.fill(0);
     Ly.headEdit.fill(0);
@@ -976,7 +1109,35 @@ function syncEdits() {
   for (const Ly of V.layers) {
     Ly.attrs.edit.needsUpdate = true;
     Ly.editEdge = Ly.layerEdit ? colour(pal[editCode(Ly.layerEdit)]) : null;
+    Ly.tint.visible = !!Ly.layerEdit;
+    if (Ly.layerEdit) Ly.tint.material.color.copy(Ly.editEdge);
     paintHeads(Ly);
+  }
+  if (flash) flashChanges(before);
+}
+
+// An edit just changed: its neurons flash and swell, and a ripple spreads from the spot.
+function flashChanges(before) {
+  const now = V.uni.uTime.value;
+  const sp = V.layout.sp;
+  let n = 0;
+  for (const Ly of V.layers) {
+    const b = before[Ly.l];
+    let changed = false;
+    for (let i = 0; i < V.N; i++) {
+      if (Ly.edit[i] === b.edit[i]) continue;
+      Ly.editAt[i] = now;
+      changed = true;
+      if (n++ < 8) spawnRipple(Ly, V.local[i * 3], V.local[i * 3 + 2], Ly.edit[i] || b.edit[i], sp * 0.8, sp * 7);
+    }
+    if (changed) Ly.attrs.editAt.needsUpdate = true;
+    for (let k = 0; k < Ly.nH; k++) {
+      if (Ly.headEdit[k] === b.head[k]) continue;
+      const p = Ly.headPos[k];
+      if (n++ < 8) spawnRipple(Ly, p.x, p.z, Ly.headEdit[k] || b.head[k], Ly.pitch * 0.5, Ly.pitch * 2.5);
+    }
+    const lc = Ly.layerEdit ? editCode(Ly.layerEdit) : 0;
+    if (lc !== b.layer && n++ < 12) spawnRipple(Ly, 0, 0, lc || b.layer, V.W * 0.15, V.W * 0.75);
   }
 }
 
@@ -986,7 +1147,7 @@ function buildViewPanel() {
   const row = (label, key, min, max, step, hint) => {
     const out = h("output", { class: "num" });
     const input = h("input", { type: "range", min, max, step, value: V.layout[key], "aria-label": label, title: hint });
-    const show = () => (out.textContent = key === "gap" ? `${Math.round((V.layout.gap / LAYOUT.gap) * 100)}%` : `${Math.round((V.layout[key] / LAYOUT[key]) * 100)}%`);
+    const show = () => (out.textContent = `${Math.round((V.layout[key] / LAYOUT[key]) * 100)}%`);
     input.addEventListener("input", () => {
       V.layout[key] = Number(input.value);
       show();
@@ -994,38 +1155,118 @@ function buildViewPanel() {
     });
     input.addEventListener("change", saveLayout);
     show();
-    return h("label", { class: "s3d-vrow" }, h("span", {}, label), input, out);
+    return h("label", { class: "s3d-vrow", title: hint }, h("span", {}, label), out, input);
   };
   V.viewPanel.replaceChildren(
-    row("Layer spacing", "gap", 0.08, 0.8, 0.01, "Spread the layers apart or stack them tight"),
-    row("Neuron spacing", "sp", 0.02, 0.07, 0.001, "Spread the neurons on each sheet"),
-    row("Neuron size", "size", 0.012, 0.08, 0.001, "How big each neuron is drawn"),
+    row("↔ Within a layer", "sp", 0.02, 0.09, 0.001, "Horizontal: spread the neurons on each sheet apart"),
+    row("↕ Between layers", "gap", 0.06, 1, 0.01, "Vertical: spread the layers apart, or stack them tight"),
+    row("Neuron size", "size", 0.015, 0.1, 0.001, "How big each neuron is drawn"),
     h(
       "div",
       { class: "s3d-vactions" },
+      h("button", { class: "btn btn-quiet btn-sm", type: "button", title: "The whole tower at 90% of the view", onclick: fitToScreen }, "Fit to screen"),
+      V.fullBtn,
       h(
         "button",
         {
           class: "btn btn-quiet btn-sm",
           type: "button",
+          title: "Default spacing and size",
           onclick: () => {
             V.layout = { ...LAYOUT };
             saveLayout();
             buildViewPanel();
             relayout();
+            fitToScreen();
           },
         },
-        "Defaults",
+        "Reset",
       ),
-      h("button", { class: "btn btn-quiet btn-sm", type: "button", onclick: resetCamera }, "Reset camera"),
     ),
   );
+  showViewPanel();
 }
 
-function resetCamera() {
+function fitToScreen() {
   putBack();
   V.savedView = null;
-  V.camAnim = { pos: V.home.pos.clone(), target: V.home.target.clone() };
+  V.userMoved = false;
+  fitCamera(true);
+}
+
+// Put the camera where the whole tower (sheets, heads, the word's line) fills FIT of the
+// stage, keeping the usual three-quarter view from above, with room on the right for the
+// layer labels. Searches the distance, then pans so the tower sits centred in its space.
+const fitBox = new THREE.Box3();
+const fitCorner = new THREE.Vector3();
+function fitCamera(animate) {
+  const w = V.stage.clientWidth;
+  const hgt = V.stage.clientHeight;
+  if (!w || !hgt) return;
+  const cam = V.camera;
+  const keep = { pos: cam.position.clone(), quat: cam.quaternion.clone() };
+  fitBox.min.set(-V.W / 2 - 0.04, V.y0 - 0.15, -(V.D / 2 + 0.22));
+  fitBox.max.set(V.W / 2 + 0.04, V.y1 + 0.15, V.D / 2 + 0.04);
+  const centre = fitBox.getCenter(new THREE.Vector3());
+  const dir = V.home.pos.clone().sub(V.home.target).normalize();
+  // NDC width kept free: the view controls on the left (when open), the labels on the right
+  const panel = V.viewPanel.hidden ? 0 : V.viewPanel.offsetWidth + 20;
+  let roomL = (2 * panel) / w;
+  let roomR = (2 * LABEL_ROOM) / w;
+  const total = roomL + roomR;
+  if (total > 1) {
+    // never give away more than half the width
+    roomL /= total;
+    roomR /= total;
+  }
+  const bounds = () => {
+    cam.updateMatrixWorld();
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      fitCorner.set(i & 1 ? fitBox.max.x : fitBox.min.x, i & 2 ? fitBox.max.y : fitBox.min.y, i & 4 ? fitBox.max.z : fitBox.min.z).project(cam);
+      x0 = Math.min(x0, fitCorner.x); x1 = Math.max(x1, fitCorner.x); y0 = Math.min(y0, fitCorner.y); y1 = Math.max(y1, fitCorner.y);
+    }
+    return { x0, x1, y0, y1 };
+  };
+  const aim = (target, d) => {
+    cam.position.copy(target).addScaledVector(dir, d);
+    cam.lookAt(target);
+  };
+  let lo = 0.5, hi = 80;
+  for (let i = 0; i < 32; i++) {
+    const d = (lo + hi) / 2;
+    aim(centre, d);
+    const b = bounds();
+    if (b.x1 - b.x0 <= FIT * (2 - roomL - roomR) && b.y1 - b.y0 <= 2 * FIT) hi = d;
+    else lo = d;
+  }
+  // pan so the box's middle lands in the middle of the space left of the labels
+  const target = centre.clone();
+  const t = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+  const R = new THREE.Vector3();
+  const U = new THREE.Vector3();
+  for (let i = 0; i < 3; i++) {
+    aim(target, hi);
+    const b = bounds();
+    R.setFromMatrixColumn(cam.matrixWorld, 0);
+    U.setFromMatrixColumn(cam.matrixWorld, 1);
+    const dx = (b.x0 + b.x1) / 2 - (roomL - roomR) / 2; // where it is minus where it should be
+    const dy = (b.y0 + b.y1) / 2;
+    target.addScaledVector(R, dx * hi * t * cam.aspect).addScaledVector(U, dy * hi * t);
+  }
+  aim(target, hi);
+  const pos = cam.position.clone();
+  cam.position.copy(keep.pos);
+  cam.quaternion.copy(keep.quat);
+  cam.updateMatrixWorld();
+  V.fitView = { pos, target };
+  if (animate) V.camAnim = { pos: pos.clone(), target: target.clone() };
+  else {
+    V.camAnim = null;
+    cam.position.copy(pos);
+    V.controls.target.copy(target);
+    V.controls.update();
+  }
 }
 
 // Place everything for the current layout (layer gap, neuron spacing, size).
@@ -1045,6 +1286,7 @@ function relayout() {
   for (const Ly of V.layers) {
     Ly.points.geometry.computeBoundingSphere();
     Ly.plate.scale.set(k, 1, k);
+    Ly.tint.scale.set(k, 1, k);
     Ly.edge.scale.set(k, 1, k);
     Ly.pitch = V.W / Math.max(1, Ly.nH);
     Ly.headPos.forEach((p, j) => p.set((j - (Ly.nH - 1) / 2) * Ly.pitch, 0, -(V.D / 2 + 0.12)));
@@ -1054,14 +1296,15 @@ function relayout() {
   }
   V.beaconPlate.scale.set(k, 1, k);
   V.ring.scale.setScalar(k);
-  V.y0 = V.layers[0].home.pos.y - 0.7;
-  V.y1 = V.layers[L - 1].home.pos.y + 0.7;
+  V.y0 = V.layers[0].home.pos.y - SPINE_PAD;
+  V.y1 = V.layers[L - 1].home.pos.y + SPINE_PAD;
   V.spine.scale.y = (V.y1 - V.y0) / V.spineH0;
   V.spine.position.y = (V.y0 + V.y1) / 2;
   if (V.selected) V.ring.position.set(V.local[V.selected.n * 3], 0.004, V.local[V.selected.n * 3 + 2]);
   if (V.selHead) V.ring.position.set(V.layers[V.selHead.l].headPos[V.selHead.h].x, 0.18, V.layers[V.selHead.l].headPos[V.selHead.h].z);
   V.beaconFor = null;
   applyPos(false);
+  if (!V.userMoved && V.sep === null) fitCamera(true); // keep the tower fitted while you spread it
 }
 
 // --- hovering an edit in the rail: where is it? -------------------------------------------------
@@ -1195,6 +1438,12 @@ function frame() {
     V.renderer.setAnimationLoop(null);
     V.running = false;
     V.playing = false;
+    if (V.full) {
+      // you went somewhere else (e.g. "Open in 2D"): come back to the normal layout
+      V.full = false;
+      V.root.classList.remove("is-full");
+      V.fullBtn.textContent = "Full window";
+    }
     return;
   }
   const now = performance.now() / 1000;
@@ -1218,6 +1467,8 @@ function frame() {
     const want = V.sep === null ? Ly.dimTarget : V.sep === Ly.l ? 1 : 0.25;
     Ly.dim += (want - Ly.dim) * k;
     Ly.pmat.uniforms.uDim.value = Ly.dim;
+    Ly.gmat.uniforms.uDim.value = Ly.dim;
+    Ly.tint.material.opacity = 0.16 * Math.max(0.4, Ly.dim);
     Ly.lmat.uniforms.uDim.value = Ly.dim;
     Ly.hl.mat.uniforms.uDim.value = Ly.dim;
     Ly.heads.material.opacity = Math.max(0.2, Ly.dim);
@@ -1246,6 +1497,7 @@ function frame() {
   updateHover();
   updateWiring();
   updateBeacon(V.uni.uTime.value);
+  updateRipples(V.uni.uTime.value);
   updateWords();
   V.renderer.render(V.scene, V.camera);
   placeLabels();
@@ -1273,13 +1525,38 @@ function placeLabels() {
     Ly.label.classList.toggle("is-hot", V.hover === Ly.l || V.sep === Ly.l);
     Ly.label.style.opacity = V.sep === null || V.sep === Ly.l ? "" : "0.35";
   }
+  hideLabelsUnderSheet();
   const st = V.data?.steps[cur().t];
   V.ioIn.hidden = V.ioOut.hidden = !st;
   if (!st) return;
   V.ioIn.replaceChildren(h("small", {}, "reads"), st.reads == null ? "your message" : quoteTok(st.reads));
   V.ioOut.replaceChildren(h("small", {}, "says"), sayText(st));
-  place(V.ioIn, new THREE.Vector3(0, V.y0 - 0.25, 0).applyMatrix4(V.scene.matrixWorld));
-  place(V.ioOut, new THREE.Vector3(0, V.y1 + 0.25, 0));
+  place(V.ioIn, new THREE.Vector3(0, V.y0 - 0.1, 0).applyMatrix4(V.scene.matrixWorld));
+  place(V.ioOut, new THREE.Vector3(0, V.y1 + 0.1, 0));
+}
+// The labels are HTML over the canvas, so a pulled-out sheet can't hide the other layers'
+// labels behind it. Hide the ones that would sit on top of it (heads included).
+const corner = new THREE.Vector3();
+function hideLabelsUnderSheet() {
+  const sep = V.sep === null ? null : V.layers.find((Ly) => Ly.l === V.sep);
+  if (!sep) {
+    for (const Ly of V.layers) Ly.label.style.visibility = "";
+    return;
+  }
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, z] of [[-V.W / 2, -(V.D / 2 + 0.12)], [V.W / 2, -(V.D / 2 + 0.12)], [-V.W / 2, V.D / 2], [V.W / 2, V.D / 2]]) {
+    corner.set(x, 0, z).applyMatrix4(sep.g.matrixWorld).project(V.camera);
+    const sx = (corner.x * 0.5 + 0.5) * V.stage.clientWidth;
+    const sy = (-corner.y * 0.5 + 0.5) * V.stage.clientHeight;
+    x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+  }
+  for (const Ly of V.layers) {
+    const el = Ly.label;
+    if (Ly === sep || el.style.display === "none") { el.style.visibility = ""; continue; }
+    const left = parseFloat(el.style.left), top = parseFloat(el.style.top);
+    const over = top > y0 - 8 && top < y1 + 8 && left < x1 && left + el.offsetWidth > x0;
+    el.style.visibility = over ? "hidden" : "";
+  }
 }
 function sayText(st) {
   if (st.says == null) return st.end === "stop" ? "(stops)" : "…";
@@ -1305,7 +1582,10 @@ function wirePointer() {
     V.pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     V.pxy = [e.clientX - r.left, e.clientY - r.top];
     V.pointerIn = true;
+    // a drag orbits or pans: from then on the camera stays where you put it
+    if (e.buttons && V.down && Math.hypot(e.clientX - V.down[0], e.clientY - V.down[1]) > 5) V.userMoved = true;
   });
+  c.addEventListener("wheel", () => (V.userMoved = true), { passive: true });
   c.addEventListener("pointerleave", () => {
     V.pointerIn = false;
   });
@@ -1401,7 +1681,18 @@ function pullOut(l) {
   // face the viewer like the 2D grid: neuron 0 top left, rows going down
   const quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(R, B, U.clone().negate()));
   Ly.target = { pos, quat };
-  V.camAnim = { pos: pos.clone().addScaledVector(B, 4.4), target: pos.clone() };
+  V.stage.classList.add("is-sep"); // the view controls step aside for the sheet
+  // close enough that the sheet (heads included) fills most of the stage, beside the next-word card
+  const t = Math.tan(THREE.MathUtils.degToRad(V.camera.fov) / 2);
+  const wpx = V.stage.clientWidth || 800;
+  const hpx = V.stage.clientHeight || 600;
+  const free = Math.max(240, wpx - (V.cand.hidden ? 0 : 280));
+  const sheetW = V.W + 0.1;
+  const sheetH = V.D + 0.36;
+  const d = Math.max(sheetH / (2 * t * 0.84), (sheetW * hpx) / (2 * t * 0.9 * free));
+  const shift = ((wpx - free) / 2) * ((2 * d * t) / hpx); // world units to slide the view right
+  const look = pos.clone().addScaledVector(R, shift).addScaledVector(U, 0.1);
+  V.camAnim = { pos: look.clone().addScaledVector(B, d), target: look };
   V.chip.hidden = false;
   V.chip.replaceChildren(
     h("strong", {}, `Layer ${l}`),
@@ -1418,7 +1709,9 @@ function putBack() {
   V.sep = null;
   deselect();
   V.chip.hidden = true;
-  if (V.savedView) V.camAnim = V.savedView;
+  V.stage.classList.remove("is-sep");
+  if (!V.userMoved) fitCamera(true); // the stage may have changed size meanwhile
+  else if (V.savedView) V.camAnim = V.savedView;
   V.savedView = null;
 }
 
@@ -1715,7 +2008,11 @@ document.addEventListener("keydown", (e) => {
     const dir = e.key === "ArrowRight" ? 1 : -1;
     step(e.shiftKey ? dir * V.L : dir);
   } else if (e.key === "Escape" && performance.now() - V.escAt > 80) {
-    putBack();
+    if (V.sep !== null) putBack();
+    else if (V.full) setFull(false);
+  } else if ((e.key === "f" || e.key === "F") && !e.shiftKey) {
+    e.preventDefault();
+    setFull(!V.full);
   }
 });
 

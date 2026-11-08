@@ -346,3 +346,14 @@ def test_step_lens_ends_at_the_real_output(fresh):
     seen = dict(r.alternatives[2]).get(r.token_ids[2])
     assert abs(g["layers"][-1]["p_next"] - seen) < 0.03
     assert g["layers"][-1]["top"][0]["prob"] >= g["layers"][-1]["p_next"] - 1e-6
+
+
+def test_mlx_caps_its_buffer_cache(engine):
+    # Uncapped, MLX kept 8.5 GB of freed buffers after one "why this word?".
+    if engine.backend.name != "mlx":
+        return
+    import mlx.core as mx
+
+    from lobotomy.backends.mlx.backend import CACHE_LIMIT
+
+    assert mx.set_cache_limit(CACHE_LIMIT) == CACHE_LIMIT  # returns the limit in force

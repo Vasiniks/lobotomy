@@ -12,6 +12,12 @@ from .model import AttnCache, DeltaCache, Qwen35, Recorder
 
 _DTYPES = {"bfloat16": mx.bfloat16, "float16": mx.float16, "float32": mx.float32}
 
+# MLX keeps freed buffers for reuse, without limit by default. One "why this word?"
+# on a few-hundred-token reply left 8.5 GB cached on top of 1.5 GB in use, and on a
+# 16 GB Mac the swapping made the next steps 2x slower. 1 GB keeps reuse for
+# ordinary steps; anything bigger goes back to the system.
+CACHE_LIMIT = 1 << 30
+
 # Tensors kept in float32 regardless of the compute dtype.
 _KEEP_F32 = ("A_log", "dt_bias")
 
@@ -58,6 +64,7 @@ class MLXBackend(Backend):
         self.dtype = _DTYPES[dtype]
         self.model: Qwen35 | None = None
         self._pristine: dict[str, mx.array] = {}
+        mx.set_cache_limit(CACHE_LIMIT)
 
     # --- loading ---------------------------------------------------------------
 

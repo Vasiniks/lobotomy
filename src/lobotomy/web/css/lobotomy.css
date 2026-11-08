@@ -155,7 +155,10 @@
 /* --- 3D layer stack ---------------------------------------------------------------- */
 .body > section.is-3d { display: flex; flex-direction: column; overflow: hidden; }
 .s3d { position: relative; flex: 1 1 auto; min-height: 440px; display: grid; grid-template-rows: minmax(0, 1fr) auto; border-top: var(--rule-width) solid var(--rule); }
-.s3d-stage { position: relative; min-height: 0; overflow: hidden; background: var(--surface-well); }
+/* full window: the 3D view covers the page (popovers and toasts still sit above it) */
+.s3d.is-full { position: fixed; inset: 0; z-index: var(--z-sticky); min-height: 0; border-top: 0; }
+/* the stage falls away towards its edges, so the tower reads as a lit object in a room */
+.s3d-stage { position: relative; min-height: 0; overflow: hidden; background: radial-gradient(ellipse 75% 70% at 42% 48%, var(--surface-well) 55%, var(--surface-deep) 100%); }
 .s3d-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .s3d-canvas:active { cursor: grabbing; }
 .s3d-canvas:focus-visible, .s3d-track:focus-visible { outline: 1px solid var(--focus); outline-offset: -2px; }
@@ -210,11 +213,12 @@
 .s3d-look { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
 .s3d-look path { fill: none; stroke: var(--ink-1); stroke-linecap: round; stroke-dasharray: 2 7; animation: s3d-flow 0.9s linear infinite; }
 @keyframes s3d-flow { to { stroke-dashoffset: 9; } }
-.s3d-lookcap { position: absolute; right: var(--space-3); bottom: var(--space-3); max-width: min(520px, calc(100% - 2 * var(--space-3) - 90px)); margin: 0; padding: 6px 10px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); color: var(--ink-2); font-size: var(--text-sm); pointer-events: none; }
+.s3d-lookcap { position: absolute; right: var(--space-3); bottom: var(--space-3); max-width: min(520px, calc(100% - 2 * var(--space-3) - 300px)); margin: 0; padding: 6px 10px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); color: var(--ink-2); font-size: var(--text-sm); pointer-events: none; }
 .s3d-lookcap strong { color: var(--ink-1); font-weight: var(--weight-bold); }
 [hidden].s3d-lookcap { display: none; }
 /* the next word: candidates with their probabilities */
-.s3d-cand { position: absolute; top: var(--space-3); right: var(--space-3); width: 248px; display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
+/* top left, clear of the layer labels on the right; a pulled-out sheet's chip takes the top left */
+.s3d-cand { position: absolute; top: var(--space-3); left: var(--space-3); width: 248px; display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
 .s3d-cand-head { margin: 0; font-size: var(--text-sm); }
 .s3d-cand-head strong { color: var(--ink-1); font-weight: var(--weight-bold); }
 .s3d-cand-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
@@ -228,11 +232,14 @@
 .s3d-cand-foot { margin: 0; font-size: var(--text-xs); }
 /* view controls: spread layers or neurons, neuron size */
 .s3d-view { position: absolute; left: var(--space-3); bottom: var(--space-3); display: grid; justify-items: start; gap: 6px; }
-.s3d-viewpanel { display: grid; gap: 8px; width: 280px; padding: 10px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--rule); }
-.s3d-vrow { display: grid; grid-template-columns: 8em minmax(0, 1fr) 3em; align-items: center; gap: 8px; color: var(--ink-2); font-size: var(--text-sm); }
-.s3d-vrow output { text-align: right; color: var(--ink-3); }
-.s3d-vactions { display: flex; gap: 4px; }
+.s3d-viewpanel { display: grid; gap: 8px; width: 196px; padding: 8px 10px; border-radius: var(--radius-panel); background: color-mix(in oklab, var(--surface-raised) 88%, transparent); box-shadow: 0 0 0 1px var(--rule); }
+.s3d-vrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; color: var(--ink-2); font-size: var(--text-sm); }
+.s3d-vrow input { grid-column: 1 / -1; width: 100%; min-width: 0; margin: 0; }
+.s3d-vrow output { text-align: right; color: var(--ink-3); font-size: var(--text-xs); }
+.s3d-vactions { display: flex; flex-wrap: wrap; gap: 4px; }
 .s3d-viewbtn { background: var(--surface-raised); }
+.s3d-stage.is-sep .s3d-view { display: none; } /* a pulled-out sheet gets the whole stage */
+.s3d-stage.is-sep .s3d-cand { left: auto; right: var(--space-3); }
 /* an edit hovered in the rail */
 .s3d-beacon { position: absolute; transform: translate(-50%, -110%); padding: 2px 8px; border-radius: 3px; background: var(--surface-raised); box-shadow: 0 0 0 1px var(--edit, var(--ink-1)); color: var(--ink-1); font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; }
 [hidden].s3d-cand, [hidden].s3d-viewpanel, [hidden].s3d-beacon { display: none; }

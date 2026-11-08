@@ -206,7 +206,8 @@ function renderLayer(section, layer, reply, detail, data, row) {
         },
         h("span", { class: `head act-${actBin(v, headRef)}${e ? ` ${editClass(e)}` : ""}` }, e?.value === 0 ? "" : fmtHead(v)),
         h("span", { class: "head-idx num" }, String(i)),
-        c ? h("span", { class: "head-cost", title: "Cut cost (KL, nats)" }, fmtCost(c.mean_kl)) : null,
+        // without the leading zero, like the head values, so "<0.001" fits a 34px cell
+        c ? h("span", { class: "head-cost", title: `Cut cost ${fmtCost(c.mean_kl)} (KL, nats)` }, fmtCost(c.mean_kl).replace(/^(<?)0\./, "$1.")) : null,
       );
     }),
   );

@@ -141,8 +141,12 @@ are the calls made while building it:
   the end. Play starts from the top. 1× takes 1.5 s per word; ¼× to 8×.
 - **Keys:** Space plays or pauses, ← → step one layer, Shift ← → one word.
 - **A clicked neuron opens the same editor as the layer view,** and lights the
-  timeline by that neuron's activity (where it fired). Edited neurons keep their
-  ring colour in 3D; "off" is a ring cut through, like the 2D cells.
+  timeline by that neuron's activity (where it fired). Edited neurons are drawn
+  whole in their edit colour (blue for turned down, orange for boosted, a ring
+  cut through for off), larger than the rest and undimmed, so edits show from
+  anywhere in the tower. When an edit lands or changes, the neuron flashes and
+  swells and a ripple in its colour spreads from it. Whole-layer edits tint the
+  sheet. With reduced motion there is no flash or ripple.
 - **Heads are tiles along each sheet's far edge,** height and lightness by the
   head's output size against the layer's 99th percentile over the reply, with
   their own lines from the middle. A pulled-out layer's heads are clickable
@@ -152,7 +156,8 @@ are the calls made while building it:
   Solid lines boost and dashed lines suppress (sign flipped when the neuron
   fired negative at that word). The popover lists the strongest six; clicking
   one pulls out that layer and opens that neuron.
-- **Word probabilities:** a *Next word* card (top right) lists the 5
+- **Word probabilities:** a *Next word* card (top left, clear of the layer
+  labels; top right while a sheet is pulled out) lists the 5
   candidates the model weighed, with the model's own probabilities (before
   temperature, top-k and top-p; the readout uses the same number). Beside
   each layer, once the word has reached it: that layer's best guess (logit
@@ -161,9 +166,23 @@ are the calls made while building it:
 - **Hovering an edit** in the rail puts a beacon on it in the tower: a line
   from the neuron, head tile or sheet up out of the top, in the edit's
   colour, with its label.
-- **View:** layer spacing, neuron spacing and neuron size sliders,
-  remembered per browser. Defaults are tighter layers (0.22) and larger
-  neurons than the first build, with a depth fade on the far side.
+- **View controls sit on the stage, open by default:** *↔ Within a layer*
+  (neuron spacing, horizontal), *↕ Between layers* (layer spacing, vertical),
+  neuron size, *Fit to screen*, *Full window* and *Reset*, remembered per
+  browser. The user asked for horizontal and vertical scaling and for the
+  structure to fill the screen.
+- **Fit to screen:** the camera keeps its three-quarter view from above and
+  moves so the whole tower fills 90% of the stage, leaving room for the view
+  controls on the left and the layer labels on the right. It fits on open,
+  on resize and while you drag the sliders, until you orbit or zoom yourself;
+  *Fit to screen* hands it back. A pulled-out sheet fills about 85% of the
+  stage, and the view controls step aside for it.
+- **Full window** (button or F, Esc to leave) lays the 3D view over the whole
+  page, timeline included.
+- **Atmosphere:** the stage darkens towards its edges (`--surface-deep`), and
+  neurons that fire hard glow softly. The glow ignores depth, so the tower
+  reads as lit from inside, and fades towards the back. Defaults are layers
+  0.16 apart and neurons 0.044 wide, larger than the first build.
 - **Attention is drawn into the timeline:** when the playhead (or a pulled-out
   layer) is on an attention layer and paused, lines run from the sheet, or from
   a clicked head, down to the words it looked at most. "Your message" collects
