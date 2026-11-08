@@ -1,36 +1,75 @@
-# lobotomy
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="src/lobotomy/web/img/mark-on-dark.svg">
+    <img alt="" src="src/lobotomy/web/img/mark-on-light.svg" width="44" align="absmiddle">
+  </picture>
+  lobotomy
+</h1>
 
-Break a small language model on purpose, live, while you chat with it, and see
-inside it to choose what to break.
+<p align="center">
+  Break a small language model on purpose, live, while you chat with it,<br>
+  and see inside it to choose what to break.
+</p>
 
-![The 3D view in full window: the word "is" has climbed to layer 20, where the neurons that fired stand as columns of light; layer 20 already guesses "Canberra" at 93%](docs/screenshots/3d-full.png)
+<p align="center">
+  <img src="docs/screenshots/climb.gif" width="760" alt="The 3D view playing a reply: each word climbs the 24 layers; on the layer it has reached, the neurons that fired rise as columns of light, and beside each layer is its guess for the next word">
+</p>
+
+## Try it
+
+On an Apple Silicon Mac (M1 or later), paste this into Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Vasiniks/lobotomy/main/install.sh | bash
+```
+
+It sets everything up in `~/lobotomy`, downloads the model (~533 MB) and opens
+the app in your browser. The first start takes about 20 s; Ctrl-C stops it.
+Next time, run `~/lobotomy/.venv/bin/lobotomy serve --open`. Run the line again
+to update, and delete `~/lobotomy` to remove it.
+
+What [the script](install.sh) does, so you can trust it:
+- it writes only into `~/lobotomy`, plus [uv](https://docs.astral.sh/uv/) (a
+  Python installer) into `~/.local/bin` if you don't have it; no admin rights
+- the app listens on 127.0.0.1 only, so nothing else on your network can reach
+  it; there is no account and no telemetry, and the only download is the model
+  from Hugging Face
+- edits change the weights in memory; the model file on disk never changes
+
+It needs about 2.5 GB of disk and 2–3 GB of free memory (*Why this word?* on a
+long reply briefly needs about 8 GB). Intel Macs, Windows and Linux aren't
+supported yet: lobotomy runs on MLX's Metal kernels, and the CUDA backend
+isn't written.
+
+## What it does
 
 You chat with the model and watch every word climb through its 24 layers.
 Find the neurons, heads or layers that matter, switch them off, turn them
 down, boost them or add noise, then ask again and see what changed. Every edit
 is a write into the weights in memory, and every edit undoes exactly.
 
-The model is **Qwen3.5 0.8B**, running locally on Apple Silicon through
-[MLX](https://github.com/ml-explore/mlx) at about 50 words a second, with
-every neuron recorded as it goes. A CUDA backend has a slot but isn't
+<p align="center">
+  <img src="docs/screenshots/edit.gif" width="760" alt="Pulling layer 20 out of the tower, clicking a neuron and switching it off (its ring turns blue), then boosting it to ×4 from the edits rail (it turns orange)">
+</p>
+
+The model is **Qwen3.5 0.8B** (or the 2B), running locally on Apple Silicon
+through [MLX](https://github.com/ml-explore/mlx) at about 50 words a second,
+with every neuron recorded as it goes. A CUDA backend has a slot but isn't
 written yet.
 
-## Quick start
+## Install by hand
 
-You need:
-- an Apple Silicon Mac
-- Python 3.11 or newer
-- about 2.5 GB of disk
-- about 2–3 GB of free memory in normal use. *Why this word?* on a long reply
-  briefly needs about 8 GB, because it runs a gradient pass. The commands use [uv](https://docs.astral.sh/uv/); plain
-`python -m venv` and `pip install -e ".[mlx,dev]"` work too.
+The one-line install runs these steps for you (without the test tools). You
+need Python 3.11 or newer; the
+commands use [uv](https://docs.astral.sh/uv/), and plain `python -m venv` with
+`pip install -e ".[mlx,dev]"` works too.
 
 ```bash
 git clone https://github.com/Vasiniks/lobotomy.git && cd lobotomy
 uv venv --python 3.13 .venv
 uv pip install --python .venv/bin/python -e ".[mlx,dev]"
 scripts/download_model.sh            # the 0.8B GGUF from Hugging Face, ~533 MB, into models/
-.venv/bin/lobotomy serve             # then open http://127.0.0.1:7860
+.venv/bin/lobotomy serve --open      # opens http://127.0.0.1:7860
 ```
 
 The first start takes about 20 s while it converts the weights (see below).
@@ -105,7 +144,9 @@ model, and lobotomy doesn't undo that yet.
   neuron is drawn. *Ride with the word* moves the camera up with the word,
   close in; *Afterglow* keeps the last words faintly lit. *Fit* frames the
   whole tower at 90% of the view (it does this on its own until you orbit or
-  zoom). *Full window* (F) gives the tower the whole page.
+  zoom). *Full window* (F) gives the tower the whole page:
+
+  ![The 3D view in full window: the word "is" has climbed to layer 20, where the neurons that fired stand as columns of light; layer 20 already guesses "Canberra" at 93%](docs/screenshots/3d-full.png)
 - **Each word in the timeline** carries 24 tiny bars: how sure each layer
   already was of that word.
 - The 3D / Activity / Lens switch brings back the 2D strips.
@@ -148,6 +189,10 @@ model, and lobotomy doesn't undo that yet.
 - **Lens.** In the 2D strips, each cell shows how sure that layer already was
   of the word the model said next. In 0.8B, nothing shows before about layer 14.
 
+| Layer view: layer 18, its three edited units ringed in blue | Lens: where each layer started to know the next word |
+|---|---|
+| ![Layer 18: its 3,584 neurons as a grid, the heads, the strongest neurons, and the edits rail](docs/screenshots/layer.png) | ![The lens over a broken reply: certainty builds only in the last layers](docs/screenshots/lens.png) |
+
 ### Compare
 
 **Ask again** re-reads the whole chat with the current weights and reuses the
@@ -155,7 +200,9 @@ first answer's seed. A different answer therefore comes from your edits, not
 from sampling luck. The answers sit side by side, with the word where they
 split marked.
 
-![Healthy: "The capital of Australia is Canberra." With 10 edits: "Australia's capital city is Sydney."](docs/screenshots/compare.png)
+![Healthy: "The capital of Australia is Canberra." With the 10 edits from "Make it stop saying Canberra": "Australia's capital city is the nation's largest city, known as the 'Pearl of the Pacific.'"](docs/screenshots/compare.png)
+
+*Why this word?* on "Canberra", then *Make it stop saying it*, then *Ask again*.
 
 Untick "Re-read the whole chat" in Settings to keep the model's memory of
 earlier turns as it read them before your edits. Only new words then come from
@@ -174,10 +221,7 @@ the broken model.
 | F | full window on or off |
 | Esc | put a pulled-out layer back, then leave full window |
 
-More screenshots:
-- [layer view](docs/screenshots/layer.png)
-- [2D strips](docs/screenshots/chat.png)
-- [lens](docs/screenshots/lens.png)
+The 3D / Activity / Lens switch also brings back the 2D strips: [screenshot](docs/screenshots/chat.png).
 
 What every number means (damage, cut cost, attribution, the lens, the 3D
 lines, wiring and guesses) is explained in
@@ -257,6 +301,8 @@ src/lobotomy/
   server.py         local JSON API + streamed chat for the web UI
   web/              the web UI: plain ES modules, no build step; js/views/stack3d.js is the 3D view
 tests/              pytest; test_backend_contract.py runs against any backend
+install.sh          the one-line installer
+scripts/            download_model.sh (resumes and retries)
 docs/               how-it-works.md (every number), design.md (decisions), screenshots
 design/             design system: tokens, logo, mockups
 ```
