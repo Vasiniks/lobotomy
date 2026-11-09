@@ -101,10 +101,20 @@ uv pip install --python .venv/bin/python -e ".[mlx,dev]"     # Apple Silicon
 .venv/bin/lobotomy run Qwen3.5-2B-Q4_K_M.gguf   # or a specific model, downloads if needed
 ```
 
-`lobe run` is a shorter alias. On Windows the paths are
-`.venv\Scripts\python.exe` and `.venv\Scripts\lobotomy.exe`. `--backend torch`
-runs the PyTorch engine on a Mac too, and `--device cpu` (or `cuda:1`) picks
-where it runs. Other commands: `lobotomy chat`, `lobotomy download`.
+`lobe` is a short alias, so `lobe run` works everywhere. Other commands:
+
+```bash
+lobotomy help                  # overview
+lobotomy help run              # help for a single command
+lobotomy status                # backends, Python, models on disk, binaries
+lobotomy list                  # alias: models — local .gguf files
+lobotomy chat                  # terminal chat with /neuron, /layer, etc.
+lobotomy serve --port 7860     # web UI, same as `run` but no auto-open
+```
+
+On Windows the paths are `.venv\Scripts\python.exe` and
+`.venv\Scripts\lobotomy.exe`. `--backend torch` runs the PyTorch engine on a
+Mac too, and `--device cpu` (or `cuda:1`) picks where it runs.
 
 The first start takes about 20 s while it converts the weights (see below).
 Later starts take about 2 s. `--port` picks another port, and Ctrl-C stops it.

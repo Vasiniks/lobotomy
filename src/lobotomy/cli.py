@@ -336,8 +336,83 @@ def _resolve_model_path(s: str) -> Path:
     return p
 
 
+def _unique_model_roots():
+    seen = set()
+    roots = []
+    for cand in (Path("models"), REPO_ROOT / "models"):
+        try:
+            resolved = cand.resolve()
+        except Exception:
+            resolved = cand
+        if resolved.exists() if hasattr(resolved, "exists") else cand.exists():
+            if str(resolved) not in seen:
+                seen.add(str(resolved))
+                # keep original cand for display if relative exists, but use resolved for scanning
+                roots.append(resolved)
+    return roots
+
+
+def _print_status():
+    import platform
+    import shutil
+    print(f"lobotomy {REPO_ROOT} — {platform.system()} {platform.machine()} / Python {platform.python_version()}")
+    try:
+        from .backends import available_backends, default_backend
+        print(f"backends: {', '.join(available_backends())} (default: {default_backend()})")
+    except Exception:
+        pass
+    for lib in ("mlx", "torch"):
+        try:
+            mod = __import__(lib)
+            ver = getattr(mod, "__version__", "?")
+            extra = ""
+            if lib == "torch":
+                try:
+                    extra = f" cuda={mod.cuda.is_available()} mps={mod.backends.mps.is_available()}"
+                except Exception:
+                    pass
+            print(f"  {lib} {ver}{extra}")
+        except Exception:
+            print(f"  {lib} not installed")
+    found = []
+    for root in _unique_model_roots():
+        for gguf in sorted(root.glob("*.gguf")):
+            sz = gguf.stat().st_size / 1e9
+            found.append(f"    {gguf} — {sz:.2f} GB")
+        cache = root / ".cache"
+        if cache.exists():
+            total = sum(f.stat().st_size for f in cache.glob("*.safetensors")) / 1e9
+            if total:
+                found.append(f"    {cache}/ — {total:.2f} GB cached weights")
+    if found:
+        print("models:")
+        for line in found:
+            print(line)
+    else:
+        print("models: none (run `lobotomy download` or `lobotomy run Qwen3.5-2B-Q4_K_M.gguf`)")
+    import sys
+    print(f"python: {sys.executable}")
+    for name in ("lobotomy", "lobe"):
+        p = shutil.which(name)
+        if p:
+            print(f"{name}: {p}")
+
+
+def _list_models():
+    any_found = False
+    for root in _unique_model_roots():
+        for gguf in sorted(root.glob("*.gguf")):
+            any_found = True
+            sz = gguf.stat().st_size / 1e9
+            print(f"{gguf} ({sz:.2f} GB)")
+    if not any_found:
+        print("No .gguf models found. Try:")
+        print("  lobe download                          # default 0.8B")
+        print("  lobe run Qwen3.5-2B-Q4_K_M.gguf         # 2B, auto-downloads")
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="lobotomy")
+    ap = argparse.ArgumentParser(prog="lobotomy", description="Break a small LLM live while chatting with it.")
     sub = ap.add_subparsers(dest="cmd")
     for name in ("chat", "serve", "run"):
         p = sub.add_parser(name, help="run the web UI (alias: serve)" if name == "run" else None)
@@ -358,9 +433,32 @@ def main(argv=None):
     d = sub.add_parser("download", help="download a Qwen3.5 GGUF from Hugging Face into models/")
     d.add_argument("file", nargs="?", default=DEFAULT_MODEL.name, help=f"e.g. Qwen3.5-2B-Q4_K_M.gguf (default: {DEFAULT_MODEL.name})")
     d.add_argument("--dir", type=Path, default=None, help="where to save it (default: models/ in the checkout)")
+
+    # utility commands
+    sub.add_parser("status", help="show install status, backends and models on disk")
+    lp = sub.add_parser("list", help="list local .gguf models")
+    sub.add_parser("models", help="alias for list")
+    h = sub.add_parser("help", help="show help for a command")
+    h.add_argument("topic", nargs="?", default=None, help="command name, e.g. `lobe help run`")
+
     args = ap.parse_args(argv)
     if args.cmd is None:
         args = ap.parse_args(["chat", *(argv or sys.argv[1:])])
+    if args.cmd in ("status",):
+        _print_status()
+        return
+    if args.cmd in ("list", "models"):
+        _list_models()
+        return
+    if args.cmd == "help":
+        if args.topic:
+            # show help for that subcommand
+            ap.parse_args([args.topic, "--help"])
+        else:
+            ap.print_help()
+            print("\nCommands: chat (default), run [model], serve, download [file], list, status, help")
+            print("Short alias: `lobe` = `lobotomy`  e.g. `lobe run Qwen3.5-2B-Q4_K_M.gguf`")
+        return
     if args.cmd == "download":
         download_model(args.file, args.dir)
         return
