@@ -2,14 +2,17 @@
 
     lobotomy chat                  # interactive
     lobotomy serve                 # web UI (see server.py)
+    lobotomy download [FILE]       # a Qwen3.5 GGUF from Hugging Face into models/
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import sys
+import time
 from pathlib import Path
 
 from . import analysis as A
@@ -18,6 +21,70 @@ from .sampling import THINK_MAX_TOKENS, SamplingParams
 
 DEFAULT_MODEL = Path("models/Qwen3.5-0.8B-Q4_K_M.gguf")
 REPO_ROOT = Path(__file__).resolve().parents[2]  # the checkout, for an install made with `pip install -e .`
+
+
+def download_model(file: str = DEFAULT_MODEL.name, dest: Path | None = None, attempts: int = 30) -> Path:
+    """Download a Qwen3.5 GGUF from Unsloth on Hugging Face, like
+    scripts/download_model.sh but in Python, so it also works on Windows.
+    A partial file resumes, and a dropped connection retries."""
+    import urllib.error
+    import urllib.request
+
+    m = re.match(r"^(Qwen3\.5-[0-9.]+B)-", file)
+    if not m:
+        sys.exit(f"don't know where to download {file!r} from; expected a name like Qwen3.5-2B-Q4_K_M.gguf")
+    url = f"https://huggingface.co/unsloth/{m.group(1)}-GGUF/resolve/main/{file}"
+    dest = dest or (REPO_ROOT / "models" if (REPO_ROOT / "pyproject.toml").exists() else Path("models"))
+    dest.mkdir(parents=True, exist_ok=True)
+    out, part = dest / file, dest / f"{file}.part"
+    if out.exists():
+        print(f"{out} already exists")
+        return out
+    print(f"downloading {url}")
+    for attempt in range(1, attempts + 1):
+        have = part.stat().st_size if part.exists() else 0
+        req = urllib.request.Request(url, headers={"Range": f"bytes={have}-", "User-Agent": "lobotomy-downloader"})
+        total = 0
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                if have and r.status != 206:  # the server ignored the range: start over
+                    have = 0
+                # the whole file's size: "Content-Range: bytes a-b/total", or the length of a full reply
+                cr = r.headers.get("Content-Range") or ""
+                total = int(cr.rsplit("/", 1)[1]) if "/" in cr and cr.rsplit("/", 1)[1].isdigit() else have + int(
+                    r.headers.get("Content-Length") or 0
+                )
+                done, last = have, 0.0
+                with open(part, "ab" if have else "wb") as f:
+                    while chunk := r.read(1 << 20):
+                        f.write(chunk)
+                        done += len(chunk)
+                        if time.time() - last > 0.5:
+                            pct = f"{100 * done / total:5.1f}%" if total else ""
+                            print(f"\r  {done / 1e6:7.1f} MB {pct}", end="", flush=True)
+                            last = time.time()
+            print()
+        except urllib.error.HTTPError as e:
+            if e.code != 416:  # 416: the partial file is already complete
+                print(f"\ndownload failed ({e}); attempt {attempt} of {attempts}", file=sys.stderr)
+                time.sleep(3)
+                continue
+        except (urllib.error.URLError, OSError, ConnectionError) as e:
+            print(f"\ndownload interrupted ({e}); resuming, attempt {attempt} of {attempts}", file=sys.stderr)
+            time.sleep(3)
+            continue
+        # a connection can end early without an error: only a full-size file counts
+        size = part.stat().st_size if part.exists() else 0
+        if total and size != total:
+            if size > total:
+                part.unlink()
+            print(f"download stopped at {size / 1e6:.1f} of {total / 1e6:.1f} MB; resuming, attempt {attempt} of {attempts}", file=sys.stderr)
+            time.sleep(3)
+            continue
+        part.replace(out)
+        print(f"saved {out}")
+        return out
+    sys.exit(f"couldn't download {file}; run the same command again to resume")
 
 HELP = """\
 Type a message to chat. Commands:
@@ -262,15 +329,26 @@ def main(argv=None):
     for name in ("chat", "serve"):
         p = sub.add_parser(name)
         p.add_argument("--model", type=Path, default=None, help=f"a Qwen3.5 GGUF (default: {DEFAULT_MODEL})")
-        p.add_argument("--backend", default=None, help="mlx or cuda (default: mlx on Apple Silicon)")
-        p.add_argument("--dtype", default="bfloat16")
+        p.add_argument(
+            "--backend",
+            default=None,
+            help="mlx (Apple Silicon) or torch (an NVIDIA GPU through CUDA, or the CPU); default: mlx on Apple Silicon, torch elsewhere",
+        )
+        p.add_argument("--device", default=None, help="torch backend only: cuda, cuda:1, cpu, mps (default: cuda if available, else cpu)")
+        p.add_argument("--dtype", default=None, help="bfloat16, float16 or float32 (default: bfloat16 on GPUs that support it, float32 on the CPU)")
         if name == "serve":
             p.add_argument("--host", default="127.0.0.1")
             p.add_argument("--port", type=int, default=7860)
             p.add_argument("--open", action="store_true", help="open the app in the browser once it's ready")
+    d = sub.add_parser("download", help="download a Qwen3.5 GGUF from Hugging Face into models/")
+    d.add_argument("file", nargs="?", default=DEFAULT_MODEL.name, help=f"e.g. Qwen3.5-2B-Q4_K_M.gguf (default: {DEFAULT_MODEL.name})")
+    d.add_argument("--dir", type=Path, default=None, help="where to save it (default: models/ in the checkout)")
     args = ap.parse_args(argv)
     if args.cmd is None:
         args = ap.parse_args(["chat", *(argv or sys.argv[1:])])
+    if args.cmd == "download":
+        download_model(args.file, args.dir)
+        return
 
     if args.model is None:
         # the default model, looked for here and in the checkout this runs
@@ -286,7 +364,9 @@ def main(argv=None):
 
     from .engine import Engine
 
-    engine = Engine(args.model, backend=args.backend, dtype=args.dtype, on_progress=lambda m: print(f"… {m}", flush=True))
+    engine = Engine(
+        args.model, backend=args.backend, dtype=args.dtype, device=args.device, on_progress=lambda m: print(f"… {m}", flush=True)
+    )
     if args.cmd == "serve":
         from .server import serve
 

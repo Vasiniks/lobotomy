@@ -17,29 +17,51 @@
 
 ## Try it
 
-On an Apple Silicon Mac (M1 or later), paste this into Terminal:
+**macOS or Linux:** paste this into a terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Vasiniks/lobotomy/main/install.sh | bash
 ```
 
+**Windows:** paste this into PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Vasiniks/lobotomy/main/install.ps1 | iex"
+```
+
 It sets everything up in `~/lobotomy`, downloads the model (~533 MB) and opens
 the app in your browser. The first start takes about 20 s; Ctrl-C stops it.
-Next time, run `~/lobotomy/.venv/bin/lobotomy serve --open`. Run the line again
-to update, and delete `~/lobotomy` to remove it.
+Next time, run `~/lobotomy/.venv/bin/lobotomy serve --open` (on Windows,
+`~\lobotomy\.venv\Scripts\lobotomy.exe serve --open`). Run the line again to
+update, and delete the `lobotomy` folder to remove it.
 
-What [the script](install.sh) does, so you can trust it:
-- it writes only into `~/lobotomy`, plus [uv](https://docs.astral.sh/uv/) (a
-  Python installer) into `~/.local/bin` if you don't have it; no admin rights
+What the scripts ([install.sh](install.sh), [install.ps1](install.ps1)) do, so
+you can trust them:
+- they write only into the `lobotomy` folder in your home folder, plus
+  [uv](https://docs.astral.sh/uv/) (a Python installer) into `~/.local/bin` if
+  you don't have it; no admin rights
 - the app listens on 127.0.0.1 only, so nothing else on your network can reach
   it; there is no account and no telemetry, and the only download is the model
   from Hugging Face
 - edits change the weights in memory; the model file on disk never changes
 
-It needs about 2.5 GB of disk and 2–3 GB of free memory (*Why this word?* on a
-long reply briefly needs about 8 GB). Intel Macs, Windows and Linux aren't
-supported yet: lobotomy runs on MLX's Metal kernels, and the CUDA backend
-isn't written.
+**Where it runs.** lobotomy has two engines that run the same model the same
+way, and the installer picks one:
+
+| Machine | Engine | Speed (0.8B) |
+|---|---|---|
+| Apple Silicon Mac (M1 or later) | MLX on the Apple GPU | about 50 words a second |
+| Windows or Linux with an NVIDIA GPU | PyTorch on CUDA | not measured yet |
+| Any other Windows or Linux PC, Intel Mac | PyTorch on the CPU | a few words a second |
+
+The PyTorch engine passes the same tests as the MLX one and gives the same
+answers (checked on a Mac's CPU, where its predictions match MLX's to within
+rounding). It hasn't been run on an NVIDIA GPU or on Windows yet, so if you
+try it there, please [open an issue](https://github.com/Vasiniks/lobotomy/issues)
+with how it went.
+
+It needs about 2.5 GB of disk and 2–3 GB of free memory, or video memory on an
+NVIDIA GPU (*Why this word?* on a long reply briefly needs about 8 GB).
 
 ## What it does
 
@@ -52,25 +74,28 @@ is a write into the weights in memory, and every edit undoes exactly.
   <img src="docs/screenshots/edit.gif" width="760" alt="Pulling layer 20 out of the tower, clicking a neuron and switching it off (its ring turns blue), then boosting it to ×4 from the edits rail (it turns orange)">
 </p>
 
-The model is **Qwen3.5 0.8B** (or the 2B), running locally on Apple Silicon
-through [MLX](https://github.com/ml-explore/mlx) at about 50 words a second,
-with every neuron recorded as it goes. A CUDA backend has a slot but isn't
-written yet.
+The model is **Qwen3.5 0.8B** (or the 2B), running locally on your own
+machine, through [MLX](https://github.com/ml-explore/mlx) on Apple Silicon or
+[PyTorch](https://pytorch.org) elsewhere, with every neuron recorded as it goes.
 
 ## Install by hand
 
 The one-line install runs these steps for you (without the test tools). You
-need Python 3.11 or newer; the
-commands use [uv](https://docs.astral.sh/uv/), and plain `python -m venv` with
-`pip install -e ".[mlx,dev]"` works too.
+need Python 3.11 or newer; the commands use [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/Vasiniks/lobotomy.git && cd lobotomy
 uv venv --python 3.13 .venv
-uv pip install --python .venv/bin/python -e ".[mlx,dev]"
-scripts/download_model.sh            # the 0.8B GGUF from Hugging Face, ~533 MB, into models/
+uv pip install --python .venv/bin/python -e ".[mlx,dev]"     # Apple Silicon
+# or, anywhere else (picks the CUDA build of PyTorch for your NVIDIA driver, or the CPU build):
+# uv pip install --python .venv/bin/python -e ".[torch,dev]" --torch-backend auto
+.venv/bin/lobotomy download          # the 0.8B GGUF from Hugging Face, ~533 MB, into models/
 .venv/bin/lobotomy serve --open      # opens http://127.0.0.1:7860
 ```
+
+On Windows the paths are `.venv\Scripts\python.exe` and
+`.venv\Scripts\lobotomy.exe`. `--backend torch` runs the PyTorch engine on a
+Mac too, and `--device cpu` (or `cuda:1`) picks where it runs.
 
 The first start takes about 20 s while it converts the weights (see below).
 Later starts take about 2 s. `--port` picks another port, and Ctrl-C stops it.
@@ -80,7 +105,7 @@ Later starts take about 2 s. `--port` picks another port, and Ctrl-C stops it.
 There's no Ollama and no llama.cpp runtime. lobotomy reads a **GGUF file** and
 runs the model itself:
 
-1. `scripts/download_model.sh` fetches Unsloth's `Qwen3.5-0.8B-Q4_K_M.gguf`, a
+1. `lobotomy download` (or `scripts/download_model.sh`) fetches Unsloth's `Qwen3.5-0.8B-Q4_K_M.gguf`, a
    4-bit file, from Hugging Face.
 2. `gguf_loader.py` opens it with the `gguf` Python package (llama.cpp's file
    reader) and **expands every weight to floating point**. It also undoes the
@@ -88,8 +113,8 @@ runs the model itself:
    stored as `-exp(A_log)`, renamed tensors), so the weights match the official
    Hugging Face checkpoint. The tokenizer and chat template come out of the
    same file.
-3. The MLX backend holds the weights as **bfloat16** on the GPU and runs its
-   own Qwen3.5 forward pass. That pass records every MLP neuron, every head and
+3. The engine (MLX, or PyTorch) holds the weights as **bfloat16** on the GPU
+   (float32 on a CPU) and runs its own Qwen3.5 forward pass. That pass records every MLP neuron, every head and
    (on attention layers) where each head looked.
 4. The converted weights are cached as `models/.cache/*.safetensors`
    (1.5 GB). That cache is why later starts are fast.
@@ -295,8 +320,8 @@ src/lobotomy/
   sampling.py       numpy sampler shared by all backends
   backends/
     base.py         the backend contract
-    mlx/            Apple Silicon (done)
-    cuda/           NVIDIA (stub)
+    mlx/            Apple Silicon (Metal)
+    pytorch/        NVIDIA GPUs (CUDA) and the CPU
   cli.py            terminal interface
   server.py         local JSON API + streamed chat for the web UI
   web/              the web UI: plain ES modules, no build step; js/views/stack3d.js is the 3D view
@@ -319,19 +344,29 @@ weights. They are skipped unless the official checkpoint is in
 `models/qwen3.5-0.8b-hf/` (`config.json`, `tokenizer.json` and the safetensors
 from `Qwen/Qwen3.5-0.8B`) and is the same size as the model under test.
 
-## Writing the CUDA backend
+## The two engines
 
-Implement `lobotomy.backends.base.Backend` in `backends/cuda/backend.py`; the
-docstring there has a suggested route. Then run the contract tests:
+`backends/base.py` is the contract; both engines implement it and record the
+same internals, so the engine, edits, server and UI don't know which one runs.
+
+- **MLX** (`backends/mlx`): Apple Silicon, with mlx-lm's Metal kernel for the
+  DeltaNet layers.
+- **PyTorch** (`backends/pytorch`): the same model, line for line, in plain
+  PyTorch, with the DeltaNet recurrence written out one token at a time, so it
+  runs anywhere PyTorch does. It picks CUDA when it can see an NVIDIA GPU and
+  the CPU otherwise. In float32 its predictions match the MLX engine's to a KL
+  of about 1e-10, and its answers word for word.
+
+Run the tests against either:
 
 ```bash
-LOBOTOMY_TEST_BACKENDS=cuda python -m pytest tests/test_backend_contract.py tests/test_engine.py
+LOBOTOMY_TEST_BACKENDS=torch .venv/bin/python -m pytest -q
 ```
 
 ## Credits
 
 - **MLX model:** follows mlx-lm's Qwen3.5 implementation and uses its Metal
-  gated-delta kernel (MIT, Apple).
+  gated-delta kernel (MIT, Apple). The PyTorch model is a port of it.
 - **3D view:** three.js r170 (MIT), vendored in `web/vendor/three/`.
 - **Weights:** Qwen3.5 by the Qwen team (Apache-2.0), quantized to GGUF by
   Unsloth.

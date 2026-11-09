@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# lobotomy: set it up and open it, in one line:
+# lobotomy: set it up and open it, in one line (macOS and Linux):
 #
 #   curl -fsSL https://raw.githubusercontent.com/Vasiniks/lobotomy/main/install.sh | bash
 #
-# What this does, in order:
-#   1. checks this is an Apple Silicon Mac (lobotomy runs on MLX's Metal kernels)
+# (Windows: see install.ps1.) What this does, in order:
+#   1. picks the engine: MLX on Apple Silicon Macs; PyTorch elsewhere, with the
+#      CUDA build when there's an NVIDIA GPU and the CPU build when there isn't
 #   2. installs uv (https://docs.astral.sh/uv/) into ~/.local/bin if it's missing;
-#      uv also fetches Python 3.13 if the Mac doesn't have it
+#      uv also fetches Python 3.13 if the machine doesn't have it
 #   3. puts lobotomy in ~/lobotomy (a git clone, or a tarball without git);
 #      run it again to update
 #   4. makes a virtual environment there and installs lobotomy into it
@@ -23,9 +24,21 @@ DIR="${LOBOTOMY_DIR:-$HOME/lobotomy}"
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() { printf 'lobotomy install: %s\n' "$*" >&2; exit 1; }
 
-# 1. Apple Silicon only
-[ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "arm64" ] \
-  || die "lobotomy needs an Apple Silicon Mac (M1 or later); this is $(uname -s) $(uname -m)."
+# 1. the engine
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+case "$OS/$ARCH" in
+  Darwin/arm64) EXTRA="mlx"; TORCH_FLAG=(); ENGINE="MLX (Apple Silicon)" ;;
+  Darwin/*) EXTRA="torch"; TORCH_FLAG=(--torch-backend cpu); ENGINE="PyTorch on the CPU (slow on an Intel Mac)" ;;
+  Linux/*)
+    EXTRA="torch"; TORCH_FLAG=(--torch-backend auto)
+    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+      ENGINE="PyTorch on your NVIDIA GPU (CUDA)"
+    else
+      ENGINE="PyTorch on the CPU (no NVIDIA GPU found; this works, but slowly)"
+    fi ;;
+  *) die "this script is for macOS and Linux; on Windows use install.ps1 (see the README)." ;;
+esac
 
 # 2. uv
 if ! command -v uv >/dev/null 2>&1; then
@@ -40,14 +53,18 @@ fi
 command -v uv >/dev/null 2>&1 || die "uv didn't install; see https://docs.astral.sh/uv/getting-started/installation/"
 
 # 3. the code
+have_git() {
+  # on macOS without the developer tools, /usr/bin/git only offers to install them
+  if [ "$OS" = "Darwin" ]; then xcode-select -p >/dev/null 2>&1 && command -v git >/dev/null 2>&1
+  else command -v git >/dev/null 2>&1; fi
+}
 if [ -d "$DIR/.git" ]; then
   say "Updating $DIR"
   git -C "$DIR" pull --ff-only --quiet
 elif [ -e "$DIR" ]; then
   [ -f "$DIR/pyproject.toml" ] || die "$DIR exists and isn't lobotomy; set LOBOTOMY_DIR to another folder."
   say "Using the existing $DIR"
-elif xcode-select -p >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
-  # (without the developer tools, /usr/bin/git only offers to install them)
+elif have_git; then
   say "Downloading lobotomy into $DIR"
   git clone --quiet --depth 1 "$REPO" "$DIR"
 else
@@ -58,9 +75,9 @@ fi
 cd "$DIR"
 
 # 4. the environment
-say "Installing lobotomy (Python 3.13, MLX)"
+say "Installing lobotomy: $ENGINE"
 [ -x .venv/bin/python ] || uv venv --quiet --python 3.13 .venv
-uv pip install --quiet --python .venv/bin/python -e ".[mlx]"
+uv pip install --quiet --python .venv/bin/python -e ".[$EXTRA]" ${TORCH_FLAG[@]+"${TORCH_FLAG[@]}"}
 
 # 5. the model
 scripts/download_model.sh

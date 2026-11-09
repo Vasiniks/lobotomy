@@ -58,9 +58,13 @@ def _apply_ops(base: mx.array, ops: list[SliceOp]) -> mx.array:
 class MLXBackend(Backend):
     name = "mlx"
 
-    def __init__(self, dtype: str = "bfloat16"):
+    device_label = "MLX"
+
+    def __init__(self, dtype: str | None = None):
+        dtype = dtype or "bfloat16"
         if dtype not in _DTYPES:
             raise ValueError(f"dtype must be one of {list(_DTYPES)}")
+        self.dtype_name = dtype
         self.dtype = _DTYPES[dtype]
         self.model: Qwen35 | None = None
         self._pristine: dict[str, mx.array] = {}

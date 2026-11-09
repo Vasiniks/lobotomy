@@ -123,10 +123,11 @@ class Engine:
         self,
         model_path: str | Path,
         backend: str | None = None,
-        dtype: str = "bfloat16",
+        dtype: str | None = None,
         system_prompt: str | None = None,
         on_progress: Callable[[str], None] | None = None,
         use_cache: bool = True,
+        device: str | None = None,
     ):
         say = on_progress or (lambda msg: None)
         self.model_path = Path(model_path)
@@ -136,7 +137,11 @@ class Engine:
         self.config: ModelConfig = g.config
         self.tokenizer = ChatTokenizer(g.tokenizer)
         name = backend or default_backend()
-        self.backend = get_backend(name, dtype=dtype) if name == "mlx" else get_backend(name)
+        self.backend = get_backend(name, dtype=dtype, device=device)
+        # each backend picks its own default dtype (bfloat16 on Apple Silicon and
+        # recent NVIDIA GPUs, float32 on the CPU); the weight cache is named after it
+        dtype = getattr(self.backend, "dtype_name", dtype or "bfloat16")
+        say(f"running on {getattr(self.backend, 'device_label', name)} in {dtype}")
         t0 = time.time()
         self._load_weights(g, name, dtype, use_cache, say)
         self.load_seconds = time.time() - t0
@@ -869,6 +874,7 @@ class Engine:
             {
                 "model_file": self.model_path.name,
                 "backend": self.backend.name,
+                "device": getattr(self.backend, "device_label", self.backend.name.upper()),
                 "load_seconds": round(self.load_seconds, 2),
                 "tensor_types": self.gguf.tensor_types,
             }

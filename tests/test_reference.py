@@ -49,8 +49,6 @@ def test_forward_pass_matches_mlx_lm_on_official_weights(ref, config, official):
 
 def test_q4_gguf_is_close_to_official(ref, engine):
     mx = pytest.importorskip("mlx.core")
-    if engine.backend.name != "mlx":
-        pytest.skip("mlx only")
     ids, ref_logits = ref
     ours = mx.array(engine.backend.logits_for(ids))
     kl = _kl(mx, ref_logits, ours)

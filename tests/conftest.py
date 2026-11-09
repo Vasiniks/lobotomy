@@ -17,7 +17,7 @@ def backends_to_test() -> list[str]:
     names = os.environ.get("LOBOTOMY_TEST_BACKENDS")
     if names:
         return names.split(",")
-    return ["mlx"] if platform.system() == "Darwin" and platform.machine() == "arm64" else ["cuda"]
+    return ["mlx"] if platform.system() == "Darwin" and platform.machine() == "arm64" else ["torch"]
 
 
 @pytest.fixture(scope="session")

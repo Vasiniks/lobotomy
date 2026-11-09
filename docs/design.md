@@ -130,6 +130,14 @@ Everything under "Screen" above is built, plus the following:
   strengths). Tweaking keeps the edit's place and seed, and ×1 keeps the edit
   (it does nothing) so the row doesn't vanish under the pointer; Undo removes
   it.
+- **A PyTorch backend for CUDA and the CPU** (2026-11-08; the user had planned
+  to write it, then asked for it): a line-for-line port of the MLX model, with
+  the DeltaNet recurrence as a plain per-token loop, so it needs no custom
+  kernels and runs on CUDA, the CPU and Apple's MPS. bfloat16 on GPUs that do
+  it natively, float32 elsewhere. Noise edits draw their noise from a seeded
+  CPU generator, so they're the same on every PyTorch device but differ from
+  MLX's. Checked on a Mac only (CPU and MPS); not yet on an NVIDIA GPU or
+  Windows.
 - **The top bar names the model by its file** (2026-11-08). A fine-tune like
   magi-1.2-2B carries its base model's name inside the GGUF ("Qwen3.5-2B"),
   so that name is shown beside the file name when the file name doesn't
@@ -224,5 +232,4 @@ Prisms. These are the calls made while building it:
 
 - vision input
 - editing while the model is typing
-- the CUDA backend (left to the user)
 - training or fine-tuning

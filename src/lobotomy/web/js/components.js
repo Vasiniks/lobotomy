@@ -72,7 +72,7 @@ export function renderTopbar(el, crumbs = []) {
       h("span", { class: "status-dot", title: state.busy ? "Generating" : "Ready" }),
       h("strong", { title: m?.model_file ?? "" }, file || "…"),
       base && h("span", { title: "The model inside the file" }, base),
-      m && h("span", {}, m.backend.toUpperCase()),
+      m && h("span", {}, m.device ?? m.backend.toUpperCase()),
     ),
     crumbs.length
       ? h(
