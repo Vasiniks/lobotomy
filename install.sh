@@ -14,8 +14,10 @@
 #   5. downloads the Qwen3.5 0.8B GGUF from Hugging Face (~533 MB) into ~/lobotomy/models
 #   6. starts lobotomy and opens it in the browser (Ctrl-C stops it)
 #
-# Nothing is written outside ~/lobotomy, except uv itself when it was missing.
-# Settings: LOBOTOMY_DIR (default ~/lobotomy), LOBOTOMY_NO_START=1 (set up only).
+# It also symlinks `lobotomy` and `lobe` into ~/.local/bin so `lobe run` works
+# from any shell. Nothing else is written outside ~/lobotomy, except uv itself
+# when it was missing. Settings: LOBOTOMY_DIR (default ~/lobotomy),
+# LOBOTOMY_NO_START=1 (set up only).
 set -euo pipefail
 
 REPO="${LOBOTOMY_REPO:-https://github.com/Vasiniks/lobotomy}"
@@ -82,10 +84,21 @@ uv pip install --quiet --python .venv/bin/python -e ".[$EXTRA]" ${TORCH_FLAG[@]+
 # 5. the model
 scripts/download_model.sh
 
-say "Done. Start it any time with:  $DIR/.venv/bin/lobotomy run  (or lobe run)"
+# 6. put `lobotomy`/`lobe` on PATH so `lobe run` works in zsh
+mkdir -p "$HOME/.local/bin"
+for bin in lobotomy lobe; do
+  if [ -x "$DIR/.venv/bin/$bin" ]; then
+    ln -sf "$DIR/.venv/bin/$bin" "$HOME/.local/bin/$bin"
+  fi
+done
+if ! echo "$PATH" | tr ':' '\n' | grep -q "$HOME/.local/bin"; then
+  say "Added ~/.local/bin to PATH — restart your shell or run: export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi
 
-# 6. start
+say "Done. Start it any time with:  lobe run  (or $DIR/.venv/bin/lobotomy run)"
+
+# 7. start
 if [ -z "${LOBOTOMY_NO_START:-}" ]; then
   say "Starting lobotomy; the first start converts the weights (~20 s)."
-  exec .venv/bin/lobotomy run
+  exec "$HOME/.local/bin/lobotomy" run 2>/dev/null || exec .venv/bin/lobotomy run
 fi

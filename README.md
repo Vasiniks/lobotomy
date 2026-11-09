@@ -42,11 +42,15 @@ lobotomy run Qwen3.5-2B-Q4_K_M.gguf   # 2B model, downloads if missing
 use `~\lobotomy\.venv\Scripts\lobotomy.exe run`. Run the install line again to
 update, and delete the `lobotomy` folder to remove it.
 
+If `zsh: command not found: lobe`, restart your terminal or run
+`export PATH="$HOME/.local/bin:$PATH"` — the installer puts `lobe` in
+`~/.local/bin`.
+
 What the scripts ([install.sh](install.sh), [install.ps1](install.ps1)) do, so
 you can trust them:
-- they write only into the `lobotomy` folder in your home folder, plus
-  [uv](https://docs.astral.sh/uv/) (a Python installer) into `~/.local/bin` if
-  you don't have it; no admin rights
+- they write into the `lobotomy` folder in your home folder, plus `lobotomy`
+  and `lobe` symlinks into `~/.local/bin`, and [uv](https://docs.astral.sh/uv/)
+  into `~/.local/bin` if you don't have it; no admin rights
 - the app listens on 127.0.0.1 only, so nothing else on your network can reach
   it; there is no account and no telemetry, and the only download is the model
   from Hugging Face
