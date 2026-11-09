@@ -31,8 +31,15 @@ powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Vas
 
 It sets everything up in `~/lobotomy`, downloads the model (~533 MB) and opens
 the app in your browser. The first start takes about 20 s; Ctrl-C stops it.
-Next time, run `~/lobotomy/.venv/bin/lobotomy serve --open` (on Windows,
-`~\lobotomy\.venv\Scripts\lobotomy.exe serve --open`). Run the line again to
+Next time:
+
+```bash
+lobotomy run              # web UI, opens browser (alias: serve --open)
+lobotomy run Qwen3.5-2B-Q4_K_M.gguf   # 2B model, downloads if missing
+```
+
+`lobe` is a short alias for `lobotomy`, so `lobe run` works too. On Windows,
+use `~\lobotomy\.venv\Scripts\lobotomy.exe run`. Run the install line again to
 update, and delete the `lobotomy` folder to remove it.
 
 What the scripts ([install.sh](install.sh), [install.ps1](install.ps1)) do, so
@@ -89,13 +96,15 @@ uv venv --python 3.13 .venv
 uv pip install --python .venv/bin/python -e ".[mlx,dev]"     # Apple Silicon
 # or, anywhere else (picks the CUDA build of PyTorch for your NVIDIA driver, or the CPU build):
 # uv pip install --python .venv/bin/python -e ".[torch,dev]" --torch-backend auto
-.venv/bin/lobotomy download          # the 0.8B GGUF from Hugging Face, ~533 MB, into models/
-.venv/bin/lobotomy serve --open      # opens http://127.0.0.1:7860
+
+.venv/bin/lobotomy run               # web UI, opens browser
+.venv/bin/lobotomy run Qwen3.5-2B-Q4_K_M.gguf   # or a specific model, downloads if needed
 ```
 
-On Windows the paths are `.venv\Scripts\python.exe` and
-`.venv\Scripts\lobotomy.exe`. `--backend torch` runs the PyTorch engine on a
-Mac too, and `--device cpu` (or `cuda:1`) picks where it runs.
+`lobe run` is a shorter alias. On Windows the paths are
+`.venv\Scripts\python.exe` and `.venv\Scripts\lobotomy.exe`. `--backend torch`
+runs the PyTorch engine on a Mac too, and `--device cpu` (or `cuda:1`) picks
+where it runs. Other commands: `lobotomy chat`, `lobotomy download`.
 
 The first start takes about 20 s while it converts the weights (see below).
 Later starts take about 2 s. `--port` picks another port, and Ctrl-C stops it.

@@ -77,11 +77,11 @@
     $lobotomy = Join-Path $Dir ".venv\Scripts\lobotomy.exe"
     Run "downloading the model" { & $lobotomy download }
 
-    Say "Done. Start it any time with:  & `"$lobotomy`" serve --open"
+    Say "Done. Start it any time with:  & `"$lobotomy`" run  (or lobe run)"
 
     # 5. start
     if (-not $env:LOBOTOMY_NO_START) {
         Say "Starting lobotomy; the first start converts the weights (~20 s)."
-        & $lobotomy serve --open
+        & $lobotomy run
     }
 }

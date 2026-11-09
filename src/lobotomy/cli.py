@@ -323,11 +323,26 @@ class Repl:
             self.stream(self.eng.stream_chat(line))
 
 
+def _resolve_model_path(s: str) -> Path:
+    """Turn a bare name like ``Qwen3.5-2B-Q4_K_M.gguf`` or a path into a Path,
+    searching ``models/`` in cwd and in the repo checkout."""
+    p = Path(s)
+    if p.exists():
+        return p
+    for base in (Path("models"), REPO_ROOT / "models"):
+        for try_path in (base / s, base / Path(s).name, REPO_ROOT / "models" / s, REPO_ROOT / "models" / Path(s).name):
+            if try_path.exists():
+                return try_path
+    return p
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="lobotomy")
     sub = ap.add_subparsers(dest="cmd")
-    for name in ("chat", "serve"):
-        p = sub.add_parser(name)
+    for name in ("chat", "serve", "run"):
+        p = sub.add_parser(name, help="run the web UI (alias: serve)" if name == "run" else None)
+        if name == "run":
+            p.add_argument("model_arg", nargs="?", default=None, help="model file (e.g. Qwen3.5-2B-Q4_K_M.gguf) — downloads if needed")
         p.add_argument("--model", type=Path, default=None, help=f"a Qwen3.5 GGUF (default: {DEFAULT_MODEL})")
         p.add_argument(
             "--backend",
@@ -336,7 +351,7 @@ def main(argv=None):
         )
         p.add_argument("--device", default=None, help="torch backend only: cuda, cuda:1, cpu, mps (default: cuda if available, else cpu)")
         p.add_argument("--dtype", default=None, help="bfloat16, float16 or float32 (default: bfloat16 on GPUs that support it, float32 on the CPU)")
-        if name == "serve":
+        if name in ("serve", "run"):
             p.add_argument("--host", default="127.0.0.1")
             p.add_argument("--port", type=int, default=7860)
             p.add_argument("--open", action="store_true", help="open the app in the browser once it's ready")
@@ -350,16 +365,40 @@ def main(argv=None):
         download_model(args.file, args.dir)
         return
 
+    # ``lobotomy run [MODEL]`` is an alias for ``serve`` that also accepts the model as a positional arg.
+    if args.cmd == "run":
+        if getattr(args, "model_arg", None):
+            # positional wins over --model if given
+            args.model = _resolve_model_path(args.model_arg)
+        # ``run`` always opens the browser unless --no-open style is added later; default to open if no flag?
+        # Keep current behavior: needs --open to open, but make bare ``lobotomy run`` feel like the installer.
+        # If user typed just ``lobotomy run`` we default open=True for convenience.
+        if not args.open and args.model_arg is None and args.model is None:
+            args.open = True
+        # for bare ``lobotomy run Qwen2B.gguf`` also default to open
+        if getattr(args, "model_arg", None) and not args.open:
+            args.open = True
+        args.cmd = "serve"
+
     if args.model is None:
         # the default model, looked for here and in the checkout this runs
-        # from, so `~/lobotomy/.venv/bin/lobotomy serve` works from any folder
+        # from, so ``~/lobotomy/.venv/bin/lobotomy serve`` works from any folder
         candidates = [DEFAULT_MODEL, REPO_ROOT / DEFAULT_MODEL]
         args.model = next((p for p in candidates if p.exists()), DEFAULT_MODEL)
+
+    # Auto-download if the name looks like a known Unsloth Qwen3.5 GGUF and isn't present.
+    if not args.model.exists() and re.match(r"^Qwen3\.5-[0-9.]+B-.*\.gguf$", args.model.name):
+        try:
+            args.model = download_model(args.model.name)
+        except SystemExit:
+            pass
+
     if not args.model.exists():
         script = REPO_ROOT / "scripts" / "download_model.sh"
         sys.exit(
             f"model not found: {args.model}\n"
-            f"download it with: {script if script.exists() else 'scripts/download_model.sh'}  (or pass --model PATH)"
+            f"download it with: lobotomy download  (or {script if script.exists() else 'scripts/download_model.sh'})"
+            f"\n  e.g. lobotomy run Qwen3.5-2B-Q4_K_M.gguf  — it will download automatically"
         )
 
     from .engine import Engine

@@ -82,10 +82,10 @@ uv pip install --quiet --python .venv/bin/python -e ".[$EXTRA]" ${TORCH_FLAG[@]+
 # 5. the model
 scripts/download_model.sh
 
-say "Done. Start it any time with:  $DIR/.venv/bin/lobotomy serve --open"
+say "Done. Start it any time with:  $DIR/.venv/bin/lobotomy run  (or lobe run)"
 
 # 6. start
 if [ -z "${LOBOTOMY_NO_START:-}" ]; then
   say "Starting lobotomy; the first start converts the weights (~20 s)."
-  exec .venv/bin/lobotomy serve --open
+  exec .venv/bin/lobotomy run
 fi
